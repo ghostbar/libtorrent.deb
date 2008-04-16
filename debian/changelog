@@ -1,0 +1,375 @@
+libtorrent (0.11.9-1.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Fix FTBFS with gcc-4.3.  (Closes: #420920)
+
+ -- James Vega <jamessan@debian.org>  Tue, 15 Apr 2008 21:38:37 -0400
+
+libtorrent (0.11.9-1) unstable; urgency=low
+
+  * New upstream version.
+  * debian/rules:
+   + Removed `-03` flag, CDBS automatically replaces it with `-02`,
+   the memory leak issue was fixed in 0.11.x versions.
+   + Added the exclusion of the doc `NEWS` since there's nothing useful
+   inside. (Closes: #444120)
+   + Added `-fno-strict-aliasing` compilation option because of issue
+   with gcc-4.2.0 that produces segfault. (Closes: #446988)
+  * debian/patches/update-changelog.patch:
+   + Updated with the new changelog.
+  * debian/control:
+   + Updated to Standards-Version 3.7.3, no modifications needed.
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Sun, 16 Dec 2007 19:09:02 -0430
+
+libtorrent (0.11.8-1) unstable; urgency=low
+
+  * New upstream version
+  * debian/patches/update-changelog.patch:
+   + Updated with the new changelog.
+  * debian/control:
+   + Added the Homepage field, deleted Homepages from the descriptions.
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Tue, 11 Sep 2007 15:12:31 -0400
+
+libtorrent (0.11.7-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/patches/update-changelog.patch:
+   + Updated. (Closes: #432572)
+
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Thu, 16 Aug 2007 18:45:29 -0400
+
+libtorrent (0.11.6-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/patches/update-changelog.patch:
+   + Updated.
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Tue, 07 Aug 2007 13:48:47 -0400
+
+libtorrent (0.11.5-1) unstable; urgency=low
+
+  * New upstream release
+  * debian/control:
+   + Removed unneeded Replace field. (Closes: #410350)
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 20 Jun 2007 20:09:21 -0400
+
+libtorrent (0.11.4-1) unstable; urgency=low
+
+  [ Jose Luis Rivas ]
+  * New upstream version.
+  * debian/patches/update-changelog.patch:
+    + Modified to patch the full file.
+  * debian/rules:
+    + Moved patchsys-quilt.mk to simple-patchsys.mk
+  * debian/control:
+    + Removed quilt from Build-Depends.
+
+  [ Arnaud Fontaine ]
+  * debian/control:
+    + Add Build-Depends against patchutils.
+    + Add XS-Vcs-Bzr field.
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Sat, 31 Mar 2007 10:31:05 -0400
+
+libtorrent (0.11.3-1) unstable; urgency=low
+
+  * New upstream release
+  * debian/patches/update-changelog.patch: updated
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Sun, 25 Mar 2007 20:37:30 -0400
+
+libtorrent (0.11.2-1) unstable; urgency=low
+
+  * New upstream release
+  * debian/patches/update-changelog.patch: updated
+  * Removed unneeded conflicts and replaces with libtorrent9 (Closes: #410350)
+
+ -- Jose Luis Rivas <ghostbar@localhost.localdomain>  Tue, 20 Mar 2007 23:55:19 -0400
+
+libtorrent (0.11.1-1) unstable; urgency=low
+
+  [ Jose Luis Rivas ]
+  * New upstream release.
+  * Changed name from libtorrent9 to libtorrent10.
+  * Fixed changelog problems (closes: #388841).
+
+  [ Arnaud Fontaine ]
+  * Switch to cdbs.
+  * debian/patches:
+    + Move upstream tarball modifications from diff.gz.
+  * debian/control:
+    + Add the Homepage field.
+    + Add myself as uploader.
+  * debian/compat:
+    + Update to debhelper 5.
+  * debian/copyright:
+    + Add the current maintainers.
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Fri, 29 Dec 2006 01:14:21 -0400
+
+libtorrent (0.10.4-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Fri, 27 Oct 2006 22:46:57 -0400
+
+libtorrent (0.10.3-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 18 Oct 2006 22:21:32 -0400
+
+libtorrent (0.10.2-1) unstable; urgency=low
+
+  * New upstream release.
+  * New maintainer.(Closes: #388528)
+  * Updated Build-Depends on `debian/control' to debhelper (>= 5.0.37.2).
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 20 Sep 2006 19:02:10 -0400
+
+libtorrent (0.10.1-1) unstable; urgency=low
+
+  * New upstream release.
+  * Changed soname to libtorrent.so.9, changed binary package names
+    accordingly.
+  * Force alignment by passing --enable-aligned to ./configure.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Tue, 22 Aug 2006 20:49:54 +0100
+
+libtorrent (0.10.0-1) unstable; urgency=low
+
+  * New upstream release.
+  * Changed soname to libtorrent.so.8, changed binary package names
+    accordingly.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Sat, 15 Jul 2006 16:40:29 +0100
+
+libtorrent (0.9.3-1) unstable; urgency=low
+
+  * New upstream release.
+  * Build with g++-4.1.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Sun, 25 Jun 2006 10:06:06 +0100
+
+libtorrent (0.9.1-1) unstable; urgency=low
+
+  * New upstream release.
+  - Added views of the downloads that can be sorted and filtered.
+    The keys '1' to '6' are bound to a set which can be modified with
+    the 'view_*' options.  (See man page)
+  - Disconnect incoming connections early if the download is full.
+    (Patch by Josef Drexler)
+  - Made IPv6 and ncursesw configurable, neither of which are actually
+    used yet.
+  - Added a "session_save" option which is scheduled by default every
+    30 minutes.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Wed, 10 May 2006 21:43:03 +0100
+
+libtorrent (0.9.0-1) unstable; urgency=low
+
+  * New upstream release.
+  - Rewrote the chunk selector with support for rarity-first.
+  - Added scrape information to the tracker list.
+  - The uploaded field in tracker requests get reset every time a
+    torrent is restarted, so buggy trackers don't think the client has
+    uploaded more than it really did.
+  - Show the client names and version in the peer list.
+  - Added "send_buffer_size" and "receive_buffer_size" options that set
+    the socket SND/RCBBUF sizes.
+  - Added signal that allows the client to filter connections based on
+    ip and port. Not implemented in the client yet.
+  - Added "tos = default|lowdelay|throughput|reliability|mincost".
+  - Close torrents with ^K.
+  - Show seen chunks and seeder count with 'i', improved by Josef
+    Drexler.
+  - Added "enable_trackers=yes|no" option that can turn on/off the use
+    of trackers on all torrents.
+  - Re-added 'tracker_dump' option which takes a filename and output
+    better formatted dumps.
+  - A larger number of bugs fixed, minor features and cleanup of the
+    API.
+
+  * Changed soname to libtorrent.so.7, changed binary package names
+    accordingly.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Thu,  6 Apr 2006 23:08:02 +0100
+
+libtorrent (0.8.5-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Thu,  9 Mar 2006 19:28:11 +0000
+
+libtorrent (0.8.4-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Mon, 13 Feb 2006 20:28:42 +0000
+
+libtorrent (0.8.2-1) unstable; urgency=low
+
+  * New upstream release.
+  - Fixed a crash when changing file priorities (Closes: #347429)
+  * Build with g++-3.4, (because rtorrent crashes if built with
+    g++-4.0). 
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Thu, 12 Jan 2006 20:47:33 +0000
+
+libtorrent (0.8.1-1) unstable; urgency=low
+
+  * New upstream release (Closes: #344948).
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Wed, 28 Dec 2005 12:46:48 +0000
+
+libtorrent (0.8.0-1) unstable; urgency=low
+
+  * New upstream release.
+  - Changed soname to libtorrent.so.5, changed binary package names
+    accordingly.  This also sloves the C++ library rename issue
+    (Closes: #339222).
+  * 0.8.0 has new throttling code, so this throttling bug should be
+    fixed now (Closes: #335176).
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Tue,  6 Dec 2005 22:00:17 +0000
+
+libtorrent (0.7.6-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Tue, 18 Oct 2005 21:28:51 +0100
+
+libtorrent (0.7.5-2) unstable; urgency=low
+
+  * Bug 331256 is actually fixed by upstream 0.7.5 (Closes: #331256).
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Wed, 12 Oct 2005 22:53:34 +0100
+
+libtorrent (0.7.5-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Thu, 29 Sep 2005 19:55:00 +0100
+
+libtorrent (0.7.4-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Wed, 21 Sep 2005 21:27:30 +0100
+
+libtorrent (0.7.3-1) unstable; urgency=low
+
+  * New upstream release.
+  - Changed soname to libtorrent.so.5, changed binary package names
+    accordingly.
+  * Fix FSF address in debian/copyright.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Sun,  4 Sep 2005 15:32:31 +0100
+
+libtorrent (0.7.2-2) unstable; urgency=low
+
+  * Fix a compiling error with regard to std::mem_fun_ref (Thanks
+    Lucas Wall).
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Mon, 22 Aug 2005 21:12:51 +0100
+
+libtorrent (0.7.2-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Thu, 18 Aug 2005 21:19:00 +0100
+
+libtorrent (0.7.1-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Sun, 14 Aug 2005 11:40:38 +0100
+
+libtorrent (0.7.0-2) unstable; urgency=low
+
+  * Apply upstream patch libtorrent-0.7.0-1.diff:
+  - Fixed a bug that gave a 1/16 chance of a torrent messing up
+    the request url by adding an space. This would require the
+    torrent to be removed and re-added to properly connect with
+    the tracker.
+  * Make libtorrent4-dev depends on libsigc++-2.0-dev.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Thu, 28 Jul 2005 21:33:15 +0100
+
+libtorrent (0.7.0-1) unstable; urgency=low
+
+  * New upstream release:
+  - Changed SONAME to libtorrent.so.4.
+  * Changed binary package names to libtorrent4[-dev].
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Sat, 23 Jul 2005 17:24:23 +0100
+
+libtorrent (0.6.7-1) unstable; urgency=low
+
+  * New upstream release.
+  * Use Standards-Version: 3.6.2.
+  * g++ 4.0 transition.
+  * Add libssl-dev to Build-Depends.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Sun, 10 Jul 2005 22:33:52 +0100
+
+libtorrent (0.6.6-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Tue, 28 Jun 2005 21:51:35 +0100
+
+libtorrent (0.6.5-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Thu, 16 Jun 2005 21:02:02 +0100
+
+libtorrent (0.6.4-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Sun, 12 Jun 2005 18:39:26 +0100
+
+libtorrent (0.6.3-1) unstable; urgency=low
+
+  * New upstream release:
+  - Changed SONAME to libtorrent.so.3.
+  * Changed binary package names to libtorrent3[-dev].
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Tue, 31 May 2005 21:55:28 +0100
+
+libtorrent (0.6.2-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Mon,  9 May 2005 21:37:02 +0100
+
+libtorrent (0.6.1-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Mon, 25 Apr 2005 20:57:45 +0100
+
+libtorrent (0.6.0-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Sat, 23 Apr 2005 10:29:29 +0100
+
+libtorrent (0.5.4-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Thu, 31 Mar 2005 23:19:00 +0100
+
+libtorrent (0.5.2-1) unstable; urgency=low
+
+  * Initial Release. (Closes: #298973)
+
+ -- Qingning Huo <qhuo@mayhq.co.uk>  Wed, 16 Mar 2005 21:32:03 +0000
+

@@ -1,0 +1,31 @@
+Source: libtorrent
+Priority: extra
+Section: libs
+Maintainer: Jose Luis Rivas <ghostbar38@gmail.com>
+Uploaders: Arnaud Fontaine <arnaud@andesi.org>
+Build-Depends: debhelper (>= 5), cdbs, patchutils (>= 0.2.25), libsigc++-2.0-dev, libssl-dev
+Standards-Version: 3.7.3
+XS-Vcs-Bzr: http://bzr.debian.org/collab-maint/libtorrent/
+Homepage: http://libtorrent.rakshasa.no/
+
+Package: libtorrent-dev
+Section: libdevel
+Architecture: any
+Depends: libtorrent10 (= ${binary:Version}), libsigc++-2.0-dev
+Description: a C++ BitTorrent library (development files)
+ LibTorrent is a BitTorrent library written in C++ for *nix. It is
+ designed to avoid redundant copying and storing of data that other
+ clients and libraries suffer from.
+ .
+ This package contains the files needed to compile and link programs
+ which use LibTorrent.
+
+Package: libtorrent10
+Section: libs
+Architecture: any
+Recommends: rtorrent
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: a C++ BitTorrent library
+ LibTorrent is a BitTorrent library written in C++ for *nix. It is
+ designed to avoid redundant copying and storing of data that other
+ clients and libraries suffer from.
