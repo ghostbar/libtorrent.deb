@@ -52,6 +52,10 @@
 
 namespace torrent {
 
+// Standard pair of up/down throttles.
+// First element is upload throttle, second element is download throttle.
+typedef std::pair<Throttle*, Throttle*> ThrottlePair;
+
 class LIBTORRENT_EXPORT ConnectionManager {
 public:
   typedef uint32_t                              size_type;
@@ -102,6 +106,8 @@ public:
   typedef sigc::slot4<void, const sockaddr*, int, int, const HashString*>   slot_handshake_type;
   typedef sigc::signal4<void, const sockaddr*, int, int, const HashString*> signal_handshake_type;
 
+  typedef sigc::slot1<ThrottlePair, const sockaddr*>  slot_address_throttle_type;
+
   ConnectionManager();
   ~ConnectionManager();
   
@@ -132,12 +138,7 @@ public:
   uint32_t            encryption_options()                    { return m_encryptionOptions; }
   void                set_encryption_options(uint32_t options); 
 
-  // Propably going to have to make m_bindAddress a pointer to make it
-  // safe.
-  //
-  // Perhaps add length parameter.
-  //
-  // Setting the bind address makes a copy.
+  // Setting the addresses creates a copy of the address.
   const sockaddr*     bind_address() const                    { return m_bindAddress; }
   void                set_bind_address(const sockaddr* sa);
 
@@ -156,17 +157,24 @@ public:
   signal_handshake_type& signal_handshake_log()                          { return m_signalHandshakeLog; }
   sigc::connection       set_signal_handshake_log(slot_handshake_type s) { return m_signalHandshakeLog.connect(s); }
 
-  // The resolver returns a pointer to its copy of the result slot which the caller may set blocked to
-  // prevent the slot from being called. The pointer must be NULL if the result slot was already called
-  // because the resolve was synchronous.
-  const slot_resolver_type& resolver() const                  { return m_slotResolver; }
-  void                set_resolver(const slot_resolver_type& s) { m_slotResolver = s; }
+  // The resolver returns a pointer to its copy of the result slot
+  // which the caller may set blocked to prevent the slot from being
+  // called. The pointer must be NULL if the result slot was already
+  // called because the resolve was synchronous.
+  const slot_resolver_type& resolver() const                             { return m_slotResolver; }
+  void                      set_resolver(const slot_resolver_type& s)    { m_slotResolver = s; }
 
   // Since trackers need our port number, it doesn't get cleared after
   // 'listen_close()'. The client may change the reported port number,
   // but do note that it gets overwritten after 'listen_open(...)'.
   port_type           listen_port() const                     { return m_listenPort; }
   void                set_listen_port(port_type p)            { m_listenPort = p; }
+
+  // The slot returns a ThrottlePair to use for the given address, or NULLs to use the default throttle.
+  const slot_address_throttle_type&
+                      address_throttle() const                { return m_slotAddressThrottle; }
+  void                set_address_throttle(const slot_address_throttle_type& s)
+                                                              { m_slotAddressThrottle = s; }
 
   // For internal usage.
   Listen*             listen()                                { return m_listen; }
@@ -193,6 +201,7 @@ private:
   slot_filter_type      m_slotFilter;
   signal_handshake_type m_signalHandshakeLog;
   slot_resolver_type    m_slotResolver;
+  slot_address_throttle_type  m_slotAddressThrottle;
 };
 
 }

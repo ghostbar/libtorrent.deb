@@ -47,14 +47,14 @@ namespace torrent {
 
 class AddressList;
 class DownloadWrapper;
-class TrackerControl;
+class TrackerList;
 class DownloadInfo;
-class TrackerBase;
+class Tracker;
 
 class TrackerManager {
 public:
   typedef uint32_t                                size_type;
-  typedef std::pair<int, TrackerBase*>            value_type;
+  typedef Tracker*                                value_type;
 
   typedef rak::mem_fun1<DownloadWrapper, void, AddressList*>       SlotSuccess;
   typedef rak::mem_fun1<DownloadWrapper, void, const std::string&> SlotFailed;
@@ -98,20 +98,23 @@ public:
   const DownloadInfo* info() const;
   void                set_info(DownloadInfo* info);
 
+  TrackerList*        container()                               { return m_control; }
+
   rak::timer          get_next_timeout() const                  { return m_taskTimeout.time(); }
 
   void                slot_success(SlotSuccess s)               { m_slotSuccess = s; }
   void                slot_failed(SlotFailed s)                 { m_slotFailed = s; }
+
+  void                receive_success(AddressList* l);
+  void                receive_failed(const std::string& msg);
 
 private:
   TrackerManager(const TrackerManager&);
   void operator = (const TrackerManager&);
 
   void                receive_timeout();
-  void                receive_success(AddressList* l);
-  void                receive_failed(const std::string& msg);
 
-  TrackerControl*     m_control;
+  TrackerList*        m_control;
 
   bool                m_active;
   bool                m_isRequesting;

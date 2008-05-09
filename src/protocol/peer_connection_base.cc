@@ -52,6 +52,7 @@
 #include "net/socket_base.h"
 #include "torrent/connection_manager.h"
 #include "torrent/peer/peer_info.h"
+#include "torrent/peer/connection_list.h"
 
 #include "extensions.h"
 #include "peer_connection_base.h"
@@ -66,8 +67,6 @@ PeerConnectionBase::PeerConnectionBase() :
   m_down(new ProtocolRead()),
   m_up(new ProtocolWrite()),
 
-  m_peerInfo(NULL),
-
   m_downStall(0),
 
   m_downInterested(false),
@@ -80,6 +79,8 @@ PeerConnectionBase::PeerConnectionBase() :
 
   m_encryptBuffer(NULL),
   m_extensions(NULL) {
+
+  m_peerInfo = NULL;
 }
 
 PeerConnectionBase::~PeerConnectionBase() {
@@ -118,10 +119,10 @@ PeerConnectionBase::initialize(DownloadMain* download, PeerInfo* peerInfo, Socke
   m_peerChunks.bitfield()->swap(*bitfield);
 
   m_peerChunks.upload_throttle()->set_list_iterator(m_download->upload_throttle()->end());
-  m_peerChunks.upload_throttle()->slot_activate(rak::make_mem_fun(this, &PeerConnectionBase::receive_throttle_up_activate));
+  m_peerChunks.upload_throttle()->slot_activate(rak::make_mem_fun(static_cast<SocketBase*>(this), &SocketBase::receive_throttle_up_activate));
 
   m_peerChunks.download_throttle()->set_list_iterator(m_download->download_throttle()->end());
-  m_peerChunks.download_throttle()->slot_activate(rak::make_mem_fun(this, &PeerConnectionBase::receive_throttle_down_activate));
+  m_peerChunks.download_throttle()->slot_activate(rak::make_mem_fun(static_cast<SocketBase*>(this), &SocketBase::receive_throttle_down_activate));
 
   download_queue()->set_delegator(m_download->delegator());
   download_queue()->set_peer_chunks(&m_peerChunks);
@@ -224,7 +225,7 @@ PeerConnectionBase::receive_download_choke(bool choke) {
 
     // If the queue isn't empty, then we might still receive some
     // pieces, so don't remove us from throttle.
-    if (!download_queue()->is_downloading() && download_queue()->empty())
+    if (!download_queue()->is_downloading() && download_queue()->queued_empty())
       m_download->download_throttle()->erase(m_peerChunks.download_throttle());
 
     // Send uninterested if unchoked, but only _after_ receiving our
@@ -326,16 +327,6 @@ PeerConnectionBase::cancel_transfer(BlockTransfer* transfer) {
 }
 
 void
-PeerConnectionBase::receive_throttle_down_activate() {
-  manager->poll()->insert_read(this);
-}
-
-void
-PeerConnectionBase::receive_throttle_up_activate() {
-  manager->poll()->insert_write(this);
-}
-
-void
 PeerConnectionBase::event_error() {
   m_download->connection_list()->erase(this, 0);
 }
@@ -386,7 +377,7 @@ PeerConnectionBase::down_chunk_finished() {
 
   // If we were choked by choke_manager but still had queued pieces,
   // then we might still be in the throttle.
-  if (m_downChoke.choked() && download_queue()->empty())
+  if (m_downChoke.choked() && download_queue()->queued_empty())
     m_download->download_throttle()->erase(m_peerChunks.download_throttle());
 
   write_insert_poll_safe();
@@ -789,18 +780,18 @@ PeerConnectionBase::should_request() {
 
 bool
 PeerConnectionBase::try_request_pieces() {
-  if (download_queue()->empty())
+  if (download_queue()->queued_empty())
     m_downStall = 0;
 
   uint32_t pipeSize = download_queue()->calculate_pipe_size(m_peerChunks.download_throttle()->rate()->rate());
 
   // Don't start requesting if we can't do it in large enough chunks.
-  if (download_queue()->size() >= (pipeSize + 10) / 2)
+  if (download_queue()->queued_size() >= (pipeSize + 10) / 2)
     return false;
 
   bool success = false;
 
-  while (download_queue()->size() < pipeSize && m_up->can_write_request()) {
+  while (download_queue()->queued_size() < pipeSize && m_up->can_write_request()) {
 
     // Delegator should return a vector of pieces, and it should be
     // passed the number of pieces it should delegate. Try to ensure
@@ -826,11 +817,11 @@ PeerConnectionBase::try_request_pieces() {
 // Send one peer exchange message according to bits set in m_sendPEXMask.
 // We can only send one message at a time, because the derived class
 // needs to flush the buffer and call up_extension before the next one.
-void
+bool
 PeerConnectionBase::send_pex_message() {
   if (!m_extensions->is_remote_supported(ProtocolExtension::UT_PEX)) {
     m_sendPEXMask = 0;
-    return;
+    return false;
   }
 
   // Message to tell peer to stop/start doing PEX is small so send it first.
@@ -846,15 +837,19 @@ PeerConnectionBase::send_pex_message() {
   } else if (m_sendPEXMask & PEX_DO && m_extensions->id(ProtocolExtension::UT_PEX)) {
     const DataBuffer& pexMessage = m_download->get_ut_pex(m_extensions->is_initial_pex());
     m_extensions->clear_initial_pex();
-
-    if (!pexMessage.empty())
-      write_prepare_extension(ProtocolExtension::UT_PEX, pexMessage);
-
+ 
     m_sendPEXMask &= ~PEX_DO;
+
+    if (pexMessage.empty())
+      return false;
+
+    write_prepare_extension(ProtocolExtension::UT_PEX, pexMessage);
 
   } else {
     m_sendPEXMask = 0;
   }
+
+  return true;
 }
 
 }

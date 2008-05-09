@@ -34,30 +34,48 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#ifndef LIBTORRENT_PROTOCOL_PEER_CONNECTION_SEED_H
-#define LIBTORRENT_PROTOCOL_PEER_CONNECTION_SEED_H
+#ifndef LIBTORRENT_DHT_TRACKER_H
+#define LIBTORRENT_DHT_TRACKER_H
 
-#include "peer_connection_base.h"
+#include "globals.h"
+
+#include <vector>
+#include <rak/socket_address.h>
+
+#include "download/download_info.h"  // for SocketAddressCompact
 
 namespace torrent {
 
-class PeerConnectionSeed : public PeerConnectionBase {
+// Container for peers tracked in a torrent.
+
+class DhtTracker {
 public:
-  PeerConnectionSeed() {}
-  ~PeerConnectionSeed();
+  // Maximum number of peers we return for a GET_PEERS query (default value only). 
+  // Needs to be small enough so that a packet with a payload of num_peers*6 bytes 
+  // does not need fragmentation. Value chosen so that the size is approximately
+  // equal to a FIND_NODE reply (8*26 bytes).
+  static const unsigned int max_peers = 32;
 
-  virtual void        initialize_custom();
-  virtual void        update_interested();
-  virtual bool        receive_keepalive();
+  // Maximum number of peers we keep track of. For torrents with more peers,
+  // we replace the oldest peer with each new announce to avoid excessively
+  // large peer tables for very active torrents.
+  static const unsigned int max_size = 128;
 
-  virtual void        event_read();
-  virtual void        event_write();
+  bool                empty() const                { return m_peers.empty(); }
+  size_t              size() const                 { return m_peers.size(); }
+
+  void                add_peer(uint32_t addr, uint16_t port);
+  std::string         get_peers(unsigned int maxPeers = max_peers);
+
+  // Remove old announces from the tracker that have not reannounced for
+  // more than the given number of seconds.
+  void                prune(uint32_t maxAge);
 
 private:
-  inline bool         read_message();
-  void                read_have_chunk(uint32_t index);
+  typedef std::vector<SocketAddressCompact> PeerList;
 
-  inline void         fill_write_buffer();
+  PeerList               m_peers;
+  std::vector<uint32_t>  m_lastSeen;
 };
 
 }

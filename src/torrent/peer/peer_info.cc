@@ -69,6 +69,9 @@ PeerInfo::~PeerInfo() {
   if (m_transferCounter != 0)
     throw internal_error("PeerInfo::~PeerInfo() m_transferCounter != 0.");
 
+  if (is_blocked())
+    throw internal_error("PeerInfo::~PeerInfo() peer is blocked.");
+
   delete rak::socket_address::cast_from(m_address);
 }
 

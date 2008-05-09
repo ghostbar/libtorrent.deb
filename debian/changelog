@@ -1,3 +1,22 @@
+libtorrent (0.12.2-1) experimental; urgency=low
+
+  * New upstream release
+  * Deleted debian/patches/update-changelog.patch:
+   + Now is shipped in a plain text file, easier to maintain.
+  * debian/control:
+   + Added "by Rakshasa" to the short description of the package.
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Thu, 08 May 2008 22:51:25 -0430
+
+libtorrent (0.12.1-1) experimental; urgency=low
+
+  * New upstream release.
+  * debian/rules:
+   + Added `-W' flag (Closes: #449214).
+   + Added CXXFLAGS to build with xscale if arch is arm (Closes: #441362).
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Thu, 08 May 2008 21:43:35 -0430
+
 libtorrent (0.11.9-1.1) unstable; urgency=low
 
   * Non-maintainer upload.

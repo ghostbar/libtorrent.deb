@@ -51,6 +51,8 @@
 #include "torrent/data/file.h"
 #include "torrent/data/file_list.h"
 #include "torrent/data/file_manager.h"
+#include "torrent/peer/peer.h"
+#include "torrent/peer/connection_list.h"
 #include "tracker/tracker_manager.h"
 
 #include "available_list.h"
@@ -104,9 +106,6 @@ DownloadWrapper::initialize(const std::string& hash, const std::string& id) {
 
   m_main.slot_hash_check_add(rak::make_mem_fun(this, &DownloadWrapper::check_chunk_hash));
 
-  m_main.connection_list()->slot_connected(rak::make_mem_fun(this, &DownloadWrapper::receive_peer_connected));
-  m_main.connection_list()->slot_disconnected(rak::make_mem_fun(this, &DownloadWrapper::receive_peer_disconnected));
-
   // Info hash must be calculate from here on.
   m_hashChecker = new HashTorrent(m_main.chunk_list());
 
@@ -115,15 +114,6 @@ DownloadWrapper::initialize(const std::string& hash, const std::string& id) {
 //   m_hashChecker->slot_storage_error(rak::make_mem_fun(this, &DownloadWrapper::receive_storage_error));
 
   m_hashChecker->delay_checked().set_slot(rak::mem_fn(this, &DownloadWrapper::receive_initial_hash));
-}
-
-void
-DownloadWrapper::open() {
-  if (info()->is_open())
-    return;
-
-  m_main.open();
-  m_hashChecker->ranges().insert(0, m_main.file_list()->size_chunks());
 }
 
 void
@@ -160,7 +150,7 @@ DownloadWrapper::receive_initial_hash() {
   if (!m_hashChecker->is_checking()) {
     receive_storage_error("Hash checker was unable to map chunk: " + std::string(rak::error_number(m_hashChecker->error_number()).c_str()));
 
-  } else if (m_main.file_list()->resize_all()) {
+  } else {
     m_hashChecker->confirm_checked();
 
     if (hash_queue()->has(this))
@@ -170,9 +160,6 @@ DownloadWrapper::receive_initial_hash() {
     // marked by HashTorrent that are not accounted for.
     m_main.chunk_selector()->initialize(m_main.file_list()->mutable_bitfield(), m_main.chunk_statistics());
     receive_update_priorities();
-
-  } else {
-    receive_storage_error("Could not resize files in the torrent.");
   }
 
   m_signalInitialHash.emit();
@@ -270,16 +257,6 @@ DownloadWrapper::receive_tracker_failed(const std::string& msg) {
 }
 
 void
-DownloadWrapper::receive_peer_connected(PeerConnectionBase* peer) {
-  m_signalPeerConnected.emit(Peer(peer));
-}
-
-void
-DownloadWrapper::receive_peer_disconnected(PeerConnectionBase* peer) {
-  m_signalPeerDisconnected.emit(Peer(peer));
-}
-
-void
 DownloadWrapper::receive_tick(uint32_t ticks) {
   // Trigger culling of PeerInfo's every hour. This should be called
   // before the is_open check to ensure that stopped torrents reduce
@@ -300,13 +277,14 @@ DownloadWrapper::receive_tick(uint32_t ticks) {
       // If PEX was disabled since the last peer exchange, deactivate it now.
       } else if (info()->is_pex_active()) {
         info()->set_pex_active(false);
+
         for (ConnectionList::iterator itr = m_main.connection_list()->begin(); itr != m_main.connection_list()->end(); ++itr)
-          (*itr)->set_peer_exchange(false);
+          (*itr)->m_ptr()->set_peer_exchange(false);
       }
     }
 
     for (ConnectionList::iterator itr = m_main.connection_list()->begin(); itr != m_main.connection_list()->end(); )
-      if (!(*itr)->receive_keepalive())
+      if (!(*itr)->m_ptr()->receive_keepalive())
         itr = m_main.connection_list()->erase(itr, ConnectionList::disconnect_available);
       else
         itr++;
@@ -339,7 +317,8 @@ DownloadWrapper::receive_update_priorities() {
 
   m_main.chunk_selector()->update_priorities();
 
-  std::for_each(m_main.connection_list()->begin(), m_main.connection_list()->end(), std::mem_fun(&PeerConnectionBase::update_interested));
+  std::for_each(m_main.connection_list()->begin(), m_main.connection_list()->end(),
+                rak::on(std::mem_fun(&Peer::m_ptr), std::mem_fun(&PeerConnectionBase::update_interested)));
 }
 
 void

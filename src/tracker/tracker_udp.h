@@ -41,27 +41,25 @@
 
 #include "net/protocol_buffer.h"
 #include "net/socket_datagram.h"
+#include "torrent/tracker.h"
+
 #include "globals.h"
-#include "tracker_base.h"
 
 namespace torrent {
 
-class TrackerUdp : public SocketDatagram, public TrackerBase {
+class TrackerUdp : public SocketDatagram, public Tracker {
 public:
   typedef ProtocolBuffer<512> ReadBuffer;
   typedef ProtocolBuffer<512> WriteBuffer;
 
   static const uint64_t magic_connection_id = 0x0000041727101980ll;
 
-  TrackerUdp(DownloadInfo* info, const std::string& url);
+  TrackerUdp(TrackerList* parent, const std::string& url);
   ~TrackerUdp();
   
   virtual bool        is_busy() const;
 
-  virtual void        send_state(DownloadInfo::State state,
-				 uint64_t down,
-				 uint64_t up,
-				 uint64_t left);
+  virtual void        send_state(int state);
 
   virtual void        close();
 
@@ -87,10 +85,7 @@ private:
   rak::socket_address m_connectAddress;
   int                 m_port;
 
-  DownloadInfo::State m_sendState;
-  uint64_t            m_sendUp;
-  uint64_t            m_sendDown;
-  uint64_t            m_sendLeft;
+  int                 m_sendState;
 
   void*               m_slotResolver;
 

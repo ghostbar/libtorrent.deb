@@ -39,10 +39,11 @@
 #include "download/download_info.h"
 #include "download/download_main.h"
 #include "net/throttle_list.h"
-#include "net/throttle_manager.h"
+#include "torrent/dht_manager.h"
 #include "torrent/exceptions.h"
 #include "torrent/error.h"
 #include "torrent/poll.h"
+#include "torrent/throttle.h"
 #include "utils/diffie_hellman.h"
 
 #include "globals.h"
@@ -524,11 +525,17 @@ Handshake::read_peer() {
     write_extension_handshake();
 
   // The download is just starting so we're not sending any
-  // bitfield.
-  if (m_download->file_list()->bitfield()->is_all_unset())
-    prepare_keepalive();
-  else
+  // bitfield. Pretend we wrote it already.
+  if (m_download->file_list()->bitfield()->is_all_unset() || m_download->initial_seeding() != NULL) {
+    m_writePos = m_download->file_list()->bitfield()->size_bytes();
+    m_writeBuffer.write_32(0);
+
+    if (m_encryption.info()->is_encrypted())
+      m_encryption.info()->encrypt(m_writeBuffer.end() - 4, 4);
+
+  } else {
     prepare_bitfield();
+  }
 
   m_state = READ_MESSAGE;
   manager->poll()->insert_write(this);
@@ -615,6 +622,12 @@ Handshake::read_done() {
   } else {
     m_bitfield.update();
   }
+
+  // Should've started to write post handshake data already, but we were
+  // still reading the bitfield/extension and postponed it. If we had no
+  // bitfield to send, we need to send a keep-alive now.
+  if (m_writePos == m_download->file_list()->bitfield()->size_bytes())
+    prepare_post_handshake(m_download->file_list()->bitfield()->is_all_unset() || m_download->initial_seeding() != NULL);
 
   if (m_writeDone)
     throw handshake_succeeded();
@@ -707,6 +720,7 @@ restart:
         goto restart;
 
     case READ_MESSAGE:
+    case POST_HANDSHAKE:
       fill_read_buffer(5);
 
       // Received a keep-alive message which means we won't be
@@ -881,8 +895,12 @@ Handshake::event_write() {
     if (!m_writeBuffer.remaining())
       throw internal_error("event_write called with empty write buffer.");
 
-    if (m_writeBuffer.consume(write_unthrottled(m_writeBuffer.position(), m_writeBuffer.remaining())))
-      manager->poll()->remove_write(this);
+    if (m_writeBuffer.consume(write_unthrottled(m_writeBuffer.position(), m_writeBuffer.remaining()))) {
+      if (m_state == POST_HANDSHAKE)
+        write_done();
+      else
+        manager->poll()->remove_write(this);
+    }
 
   } catch (handshake_succeeded& e) {
     m_manager->receive_succeeded(this);
@@ -966,6 +984,8 @@ Handshake::prepare_handshake() {
 
   std::memset(m_writeBuffer.end(), 0, 8);
   *(m_writeBuffer.end()+5) |= 0x10;    // support extension protocol
+  if (manager->dht_manager()->is_active())
+    *(m_writeBuffer.end()+7) |= 0x01;  // DHT support, enable PORT message
   m_writeBuffer.move_end(8);
 
   m_writeBuffer.write_range(m_download->info()->hash().c_str(), m_download->info()->hash().c_str() + 20);
@@ -1011,14 +1031,42 @@ Handshake::prepare_bitfield() {
 }
 
 void
-Handshake::prepare_keepalive() {
-  m_writeBuffer.write_32(0);
+Handshake::prepare_post_handshake(bool must_write) {
+  if (m_writePos != m_download->file_list()->bitfield()->size_bytes())
+    throw internal_error("Handshake::prepare_post_handshake called while bitfield not written completely.");
+
+  m_state = POST_HANDSHAKE;
+
+  Buffer::iterator old_end = m_writeBuffer.end();
+
+  // Send PORT message for DHT if enabled and peer supports it.
+  if (m_peerInfo->supports_dht() && manager->dht_manager()->is_active() && manager->dht_manager()->can_receive_queries()) {
+    m_writeBuffer.write_32(3);
+    m_writeBuffer.write_8(protocol_port);
+    m_writeBuffer.write_16(manager->dht_manager()->port());
+    manager->dht_manager()->port_sent();
+  }
+
+  // Send a keep-alive if we still must send something.
+  if (must_write && old_end == m_writeBuffer.end())
+    m_writeBuffer.write_32(0);
 
   if (m_encryption.info()->is_encrypted())
-    m_encryption.info()->encrypt(m_writeBuffer.end() - 4, 4);
+    m_encryption.info()->encrypt(old_end, m_writeBuffer.end() - old_end);
 
-  // Skip writting the bitfield.
-  m_writePos = m_download->file_list()->bitfield()->size_bytes();
+  if (!m_writeBuffer.remaining())
+    write_done();
+}
+
+void
+Handshake::write_done() {
+  m_writeDone = true;
+  manager->poll()->remove_write(this);
+
+  // Ok to just check m_readDone as the call in event_read() won't
+  // set it before the call.
+  if (m_readDone)
+    throw handshake_succeeded();
 }
 
 void
@@ -1085,14 +1133,15 @@ Handshake::write_bitfield() {
     }
   }
 
+  // We can't call prepare_post_handshake until the read code is done reading
+  // the bitfield, so if we get here before then, postpone the post handshake
+  // data until reading is done. Since we're done writing, remove us from the
+  // poll in that case.
   if (m_writePos == bitfield->size_bytes()) {
-    m_writeDone = true;
-    manager->poll()->remove_write(this);
-
-    // Ok to just check m_readDone as the call in event_read() won't
-    // set it before the call.
-    if (m_readDone)
-      throw handshake_succeeded();
+    if (!m_readDone)
+      manager->poll()->remove_write(this);
+    else
+      prepare_post_handshake(false);
   }
 }
 

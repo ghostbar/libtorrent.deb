@@ -45,6 +45,7 @@
 #include "torrent/connection_manager.h"
 #include "torrent/peer/peer_info.h"
 #include "torrent/peer/client_list.h"
+#include "torrent/peer/connection_list.h"
 
 #include "peer_connection_base.h"
 #include "handshake.h"
@@ -193,7 +194,7 @@ HandshakeManager::receive_succeeded(Handshake* handshake) {
 
       // We need to make libtorrent more selective in the clients it
       // connects to, and to move this somewhere else.
-      (!download->file_list()->is_done() || !handshake->bitfield()->is_all_set()) &&
+      (!download->file_list()->is_done() || !handshake->bitfield()->is_all_set() || download->initial_seeding() != NULL) &&
 
       (pcb = download->connection_list()->insert(handshake->peer_info(),
                                                  handshake->get_fd(),

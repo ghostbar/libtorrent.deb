@@ -66,6 +66,10 @@
 /* Define to 1 if you have the <sys/vfs.h> header file. */
 #undef HAVE_SYS_VFS_H
 
+/* Define to 1 if your C++ library supports the extensions from Technical
+   Report 1 */
+#undef HAVE_TR1
+
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
@@ -95,6 +99,9 @@
 
 /* Identifier that is part of the default peer id */
 #undef PEER_NAME
+
+/* 4 byte client and version identifier for DHT */
+#undef PEER_VERSION
 
 /* enable ipv6 stuff */
 #undef RAK_USE_INET6

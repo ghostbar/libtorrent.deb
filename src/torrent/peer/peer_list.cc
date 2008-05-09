@@ -191,6 +191,11 @@ PeerList::insert_available(const void* al) {
   return inserted;
 }
 
+uint32_t
+PeerList::available_list_size() const {
+  return m_availableList->size();
+}
+
 PeerInfo*
 PeerList::connected(const sockaddr* sa, int flags) {
   if (!socket_address_key::is_comparable(sa))
@@ -301,7 +306,8 @@ PeerList::cull_peers(int flags) {
         itr->second->transfer_counter() != 0 ||
         itr->second->last_connection() >= timer ||
 
-        (flags & cull_keep_interesting && itr->second->failed_counter() != 0)) {
+        (flags & cull_keep_interesting && 
+         (itr->second->failed_counter() != 0 || itr->second->is_blocked()))) {
       itr++;
       continue;
     }
