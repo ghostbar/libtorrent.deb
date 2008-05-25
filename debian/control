@@ -5,7 +5,8 @@ Maintainer: Jose Luis Rivas <ghostbar38@gmail.com>
 Uploaders: Arnaud Fontaine <arnaud@andesi.org>
 Build-Depends: debhelper (>= 5), cdbs, patchutils (>= 0.2.25), libsigc++-2.0-dev, libssl-dev
 Standards-Version: 3.7.3
-XS-Vcs-Bzr: http://bzr.debian.org/collab-maint/libtorrent/
+XS-Vcs-git: git://git.ghostbar.ath.cx/libtorrent.git
+XS-Vcs-browser: http://git.ghostbar.ath.cx/?p=libtorrent.git;a=summary
 Homepage: http://libtorrent.rakshasa.no/
 
 Package: libtorrent-dev
