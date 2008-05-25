@@ -45,21 +45,37 @@
 #include "download/chunk_statistics.h"
 #include "download/download_info.h"
 #include "download/download_main.h"
+#include "torrent/dht_manager.h"
+#include "torrent/peer/connection_list.h"
+#include "torrent/peer/peer_info.h"
 
 #include "extensions.h"
+#include "initial_seed.h"
 #include "peer_connection_leech.h"
 
 namespace torrent {
 
-PeerConnectionLeech::~PeerConnectionLeech() {
+template<Download::ConnectionType type>
+PeerConnection<type>::~PeerConnection() {
 //   if (m_download != NULL && m_down->get_state() != ProtocolRead::READ_BITFIELD)
 //     m_download->bitfield_counter().dec(m_peerChunks.bitfield()->bitfield());
 
 //   priority_queue_erase(&taskScheduler, &m_taskSendChoke);
 }
 
+template<Download::ConnectionType type>
 void
-PeerConnectionLeech::initialize_custom() {
+PeerConnection<type>::initialize_custom() {
+  if (type == Download::CONNECTION_INITIAL_SEED) {
+    if (m_download->initial_seeding() == NULL) {
+      // Can't throw close_connection or network_error here, we're still
+      // initializing. So close the socket and let that kill it later.
+      get_fd().close();
+      return;
+    }
+
+    m_download->initial_seeding()->new_peer(this);
+  }
 //   if (m_download->content()->chunks_completed() != 0) {
 //     m_up->write_bitfield(m_download->file_list()->bitfield()->size_bytes());
 
@@ -69,8 +85,12 @@ PeerConnectionLeech::initialize_custom() {
 //   }
 }
 
+template<Download::ConnectionType type>
 void
-PeerConnectionLeech::update_interested() {
+PeerConnection<type>::update_interested() {
+  if (type != Download::CONNECTION_LEECH)
+    return;
+
   m_peerChunks.download_cache()->clear();
 
   if (m_downInterested)
@@ -88,8 +108,9 @@ PeerConnectionLeech::update_interested() {
 //   m_download->download_choke_manager()->set_queued(this, &m_downChoke);
 }
 
+template<Download::ConnectionType type>
 bool
-PeerConnectionLeech::receive_keepalive() {
+PeerConnection<type>::receive_keepalive() {
   if (cachedTime - m_timeLastRead > rak::timer::from_seconds(240))
     return false;
 
@@ -107,6 +128,9 @@ PeerConnectionLeech::receive_keepalive() {
       m_encryption.encrypt(old_end, m_up->buffer()->end() - old_end);
   }
 
+  if (type != Download::CONNECTION_LEECH)
+    return true;
+
   m_tryRequest = true;
 
   // Stall pieces when more than one receive_keepalive() has been
@@ -122,13 +146,14 @@ PeerConnectionLeech::receive_keepalive() {
   // again.
 
   // TODO: Do we need to remove from download throttle here?
+  //
+  // Do we also need to remove from download throttle? Check how it
+  // worked again.
 
-  if (!download_queue()->empty() && m_downStall++ != 0) {
-    if (m_downStall > 6)
-      download_queue()->cancel();
-    else
-      download_queue()->stall();
-  }
+  if (!download_queue()->canceled_empty() && m_downStall >= 6)
+    download_queue()->cancel();
+  else if (!download_queue()->queued_empty() && m_downStall++ != 0)
+    download_queue()->stall();
 
   return true;
 }
@@ -136,8 +161,9 @@ PeerConnectionLeech::receive_keepalive() {
 // We keep the message in the buffer if it is incomplete instead of
 // keeping the state and remembering the read information. This
 // shouldn't happen very often compared to full reads.
+template<Download::ConnectionType type>
 inline bool
-PeerConnectionLeech::read_message() {
+PeerConnection<type>::read_message() {
   ProtocolBuffer<512>* buf = m_down->buffer();
 
   if (buf->remaining() < 4)
@@ -160,7 +186,7 @@ PeerConnectionLeech::read_message() {
     return false;
 
   } else if (length > (1 << 20)) {
-    throw communication_error("PeerConnectionLeech::read_message() got an invalid message length.");
+    throw communication_error("PeerConnection::read_message() got an invalid message length.");
   }
     
   // We do not verify the message length of those with static
@@ -177,6 +203,9 @@ PeerConnectionLeech::read_message() {
 
   switch (buf->read_8()) {
   case ProtocolBase::CHOKE:
+    if (type != Download::CONNECTION_LEECH)
+      return true;
+
     // Cancel before dequeueing so receive_download_choke knows if it
     // should remove us from throttle.
     //
@@ -194,6 +223,9 @@ PeerConnectionLeech::read_message() {
     return true;
 
   case ProtocolBase::UNCHOKE:
+    if (type != Download::CONNECTION_LEECH)
+      return true;
+
     m_downUnchoked = true;
 
     // Some peers unchoke us even though we're not interested, so we
@@ -205,7 +237,7 @@ PeerConnectionLeech::read_message() {
     return true;
 
   case ProtocolBase::INTERESTED:
-    if (m_peerChunks.bitfield()->is_all_set())
+    if (type == Download::CONNECTION_LEECH && m_peerChunks.bitfield()->is_all_set())
       return true;
 
     m_download->upload_choke_manager()->set_queued(this, &m_upChoke);
@@ -237,6 +269,9 @@ PeerConnectionLeech::read_message() {
     return true;
 
   case ProtocolBase::PIECE:
+    if (type != Download::CONNECTION_LEECH)
+      throw communication_error("Received a piece but the connection is strictly for seeding.");
+
     if (!m_down->can_read_piece_body())
       break;
 
@@ -275,6 +310,13 @@ PeerConnectionLeech::read_message() {
     read_cancel_piece(m_down->read_request());
     return true;
 
+  case ProtocolBase::PORT:
+    if (!m_down->can_read_port_body())
+      break;
+
+    manager->dht_manager()->add_node(m_peerInfo->socket_address(), m_down->buffer()->read_16());
+    return true;
+
   case ProtocolBase::EXTENSION_PROTOCOL:
     if (!m_down->can_read_extension_body())
       break;
@@ -304,8 +346,9 @@ PeerConnectionLeech::read_message() {
   return false;
 }
 
+template<Download::ConnectionType type>
 void
-PeerConnectionLeech::event_read() {
+PeerConnection<type>::event_read() {
   m_timeLastRead = cachedTime;
 
   // Need to make sure ProtocolBuffer::end() is pointing to the end of
@@ -349,6 +392,9 @@ PeerConnectionLeech::event_read() {
         }
 
       case ProtocolRead::READ_PIECE:
+        if (type != Download::CONNECTION_LEECH)
+          return;
+
         if (!download_queue()->is_downloading())
           throw internal_error("ProtocolRead::READ_PIECE state but RequestList is not downloading.");
 
@@ -366,6 +412,9 @@ PeerConnectionLeech::event_read() {
         break;
 
       case ProtocolRead::READ_SKIP_PIECE:
+        if (type != Download::CONNECTION_LEECH)
+          return;
+
         if (download_queue()->transfer()->is_leader()) {
           m_down->set_state(ProtocolRead::READ_PIECE);
           break;
@@ -387,7 +436,7 @@ PeerConnectionLeech::event_read() {
         break;
 
       default:
-        throw internal_error("PeerConnectionLeech::event_read() wrong state.");
+        throw internal_error("PeerConnection::event_read() wrong state.");
       }
 
       // Figure out how to get rid of the shouldLoop boolean.
@@ -419,11 +468,12 @@ PeerConnectionLeech::event_read() {
   }
 }
 
+template<Download::ConnectionType type>
 inline void
-PeerConnectionLeech::fill_write_buffer() {
+PeerConnection<type>::fill_write_buffer() {
   ProtocolBuffer<512>::iterator old_end = m_up->buffer()->end();
 
-  // No need to use delayed choke as we are a leecher.
+  // No need to use delayed choke ever.
   if (m_sendChoked && m_up->can_write_choke()) {
     m_sendChoked = false;
     m_up->write_choke(m_upChoke.choked());
@@ -450,12 +500,12 @@ PeerConnectionLeech::fill_write_buffer() {
   // e.g. BitTornado 0.7.14 and uTorrent 0.3.0, disconnect if a
   // request has been received while uninterested. The problem arises
   // as they send unchoke before receiving interested.
-  if (m_sendInterested && m_up->can_write_interested()) {
+  if (type == Download::CONNECTION_LEECH && m_sendInterested && m_up->can_write_interested()) {
     m_up->write_interested(m_downInterested);
     m_sendInterested = false;
   }
 
-  if (m_tryRequest) {
+  if (type == Download::CONNECTION_LEECH && m_tryRequest) {
     if (!(m_tryRequest = !should_request()) &&
         !(m_tryRequest = try_request_pieces()) &&
 
@@ -469,7 +519,8 @@ PeerConnectionLeech::fill_write_buffer() {
 
   DownloadMain::have_queue_type* haveQueue = m_download->have_queue();
 
-  if (!haveQueue->empty() &&
+  if (type == Download::CONNECTION_LEECH && 
+      !haveQueue->empty() &&
       m_peerChunks.have_timer() <= haveQueue->front().first &&
       m_up->can_write_have()) {
     DownloadMain::have_queue_type::iterator last = std::find_if(haveQueue->begin(), haveQueue->end(),
@@ -482,25 +533,32 @@ PeerConnectionLeech::fill_write_buffer() {
     m_peerChunks.set_have_timer(last->first + 1);
   }
 
-  while (!m_peerChunks.cancel_queue()->empty() && m_up->can_write_cancel()) {
+  if (type == Download::CONNECTION_INITIAL_SEED && m_up->can_write_have())
+    offer_chunk();
+
+  while (type == Download::CONNECTION_LEECH && !m_peerChunks.cancel_queue()->empty() && m_up->can_write_cancel()) {
     m_up->write_cancel(m_peerChunks.cancel_queue()->front());
     m_peerChunks.cancel_queue()->pop_front();
   }
 
-  if (m_sendPEXMask && m_up->can_write_extension())
-    send_pex_message();
+  if (m_sendPEXMask && m_up->can_write_extension() &&
+      send_pex_message()) {
+    // Don't do anything else if send_pex_message() succeeded.
 
-  else if (!m_upChoke.choked() &&
-           !m_peerChunks.upload_queue()->empty() &&
-           m_up->can_write_piece())
+  } else if (!m_upChoke.choked() &&
+             !m_peerChunks.upload_queue()->empty() &&
+             m_up->can_write_piece() &&
+             (type != Download::CONNECTION_INITIAL_SEED || should_upload())) {
     write_prepare_piece();
+  }
 
   if (is_encrypted())
     m_encryption.encrypt(old_end, m_up->buffer()->end() - old_end);
 }
 
+template<Download::ConnectionType type>
 void
-PeerConnectionLeech::event_write() {
+PeerConnection<type>::event_write() {
   try {
   
     do {
@@ -556,7 +614,7 @@ PeerConnectionLeech::event_write() {
         break;
 
       default:
-        throw internal_error("PeerConnectionLeech::event_write() wrong state.");
+        throw internal_error("PeerConnection::event_write() wrong state.");
       }
 
     } while (true);
@@ -584,8 +642,9 @@ PeerConnectionLeech::event_write() {
   }
 }
 
+template<Download::ConnectionType type>
 void
-PeerConnectionLeech::read_have_chunk(uint32_t index) {
+PeerConnection<type>::read_have_chunk(uint32_t index) {
   if (index >= m_peerChunks.bitfield()->size_bits())
     throw communication_error("Peer sent HAVE message with out-of-range index.");
 
@@ -594,14 +653,20 @@ PeerConnectionLeech::read_have_chunk(uint32_t index) {
 
   m_download->chunk_statistics()->received_have_chunk(&m_peerChunks, index, m_download->file_list()->chunk_size());
 
+  if (type == Download::CONNECTION_INITIAL_SEED)
+    m_download->initial_seeding()->chunk_seen(index, this);
+
+  // Disconnect seeds when we are seeding (but not for initial seeding
+  // so that we keep accurate chunk statistics until that is done).
   if (m_peerChunks.bitfield()->is_all_set()) {
-    if (m_download->file_list()->is_done())
+    if (type == Download::CONNECTION_SEED || 
+        (type != Download::CONNECTION_INITIAL_SEED && m_download->file_list()->is_done()))
       throw close_connection();
 
     m_download->upload_choke_manager()->set_not_queued(this, &m_upChoke);
   }
 
-  if (m_download->file_list()->is_done())
+  if (type != Download::CONNECTION_LEECH || m_download->file_list()->is_done())
     return;
 
   if (is_down_interested()) {
@@ -631,5 +696,57 @@ PeerConnectionLeech::read_have_chunk(uint32_t index) {
     }
   }
 }
+
+template<>
+void
+PeerConnection<Download::CONNECTION_INITIAL_SEED>::offer_chunk() {
+  // If bytes left to send in this chunk minus bytes about to be sent is zero,
+  // assume the peer will have got the chunk completely. In that case we may
+  // get another one to offer if not enough other peers are interested even
+  // if the peer would otherwise still be blocked.
+  uint32_t bytesLeft = m_data.bytesLeft;
+  if (!m_peerChunks.upload_queue()->empty() && m_peerChunks.upload_queue()->front().index() == m_data.lastIndex)
+    bytesLeft -= m_peerChunks.upload_queue()->front().length();
+
+  uint32_t index = m_download->initial_seeding()->chunk_offer(this, bytesLeft == 0 ? m_data.lastIndex : InitialSeeding::no_offer);
+
+  if (index == InitialSeeding::no_offer || index == m_data.lastIndex)
+    return;
+
+  m_up->write_have(index);
+  m_data.lastIndex = index;
+  m_data.bytesLeft = m_download->file_list()->chunk_index_size(index);
+}
+
+template<>
+bool
+PeerConnection<Download::CONNECTION_INITIAL_SEED>::should_upload() {
+  // For initial seeding, check if chunk is well seeded now, and if so
+  // remove it from the queue to better use our bandwidth on rare chunks.
+  while (!m_peerChunks.upload_queue()->empty() &&
+         !m_download->initial_seeding()->should_upload(m_peerChunks.upload_queue()->front().index()))
+    m_peerChunks.upload_queue()->pop_front();
+
+  // If queue ends up empty, choke peer to let it know that it
+  // shouldn't wait for the cancelled pieces to be sent.
+  if (m_peerChunks.upload_queue()->empty()) {
+    m_download->upload_choke_manager()->set_not_queued(this, &m_upChoke);
+    m_download->upload_choke_manager()->set_queued(this, &m_upChoke);
+
+  // If we're sending the chunk we last offered, adjust bytes left in it.
+  } else if (m_peerChunks.upload_queue()->front().index() == m_data.lastIndex) {
+    m_data.bytesLeft -= m_peerChunks.upload_queue()->front().length();
+
+    if (!m_data.bytesLeft)
+      m_data.lastIndex = InitialSeeding::no_offer;
+  }
+
+  return !m_peerChunks.upload_queue()->empty();
+}
+
+// Explicit instantiation of the member functions and vtable.
+template class PeerConnection<Download::CONNECTION_LEECH>;
+template class PeerConnection<Download::CONNECTION_SEED>;
+template class PeerConnection<Download::CONNECTION_INITIAL_SEED>;
 
 }

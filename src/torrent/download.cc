@@ -55,32 +55,45 @@
 #include "download/download_info.h"
 #include "peer/peer_info.h"
 #include "tracker/tracker_manager.h"
+#include "torrent/data/file.h"
+#include "torrent/peer/connection_list.h"
 
 #include "exceptions.h"
 #include "download.h"
 #include "object.h"
+#include "throttle.h"
 #include "tracker_list.h"
 
 namespace torrent {
 
 void
-Download::open() {
-  m_ptr->open();
+Download::open(int flags) {
+  if (m_ptr->info()->is_open())
+    return;
+
+  // Currently always open with no_create, as start will make sure
+  // they are created. Need to fix this.
+  m_ptr->main()->open(FileList::open_no_create);
+  m_ptr->hash_checker()->ranges().insert(0, m_ptr->main()->file_list()->size_chunks());
+
+  // Mark the files by default to be created and resized. The client
+  // should be allowed to pass a flag that will keep the old settings,
+  // although loading resume data should really handle everything
+  // properly.
+  for (FileList::iterator itr = m_ptr->main()->file_list()->begin(), last = m_ptr->main()->file_list()->end(); itr != last; itr++)
+    (*itr)->set_flags(File::flag_create_queued | File::flag_resize_queued);
 }
 
 void
-Download::close() {
+Download::close(int flags) {
   if (m_ptr->info()->is_active())
-    stop();
+    stop(0);
 
   m_ptr->close();
 }
 
-void Download::start() { start2(0); }
-void Download::stop()  { stop2(0); }
-
 void
-Download::start2(int flags) {
+Download::start(int flags) {
   if (!m_ptr->hash_checker()->is_checked())
     throw internal_error("Tried to start an unchecked download.");
 
@@ -89,6 +102,14 @@ Download::start2(int flags) {
 
   if (m_ptr->info()->is_active())
     return;
+
+//   file_list()->open(flags);
+  file_list()->open(flags & ~FileList::open_no_create);
+
+  if (m_ptr->connection_type() == CONNECTION_INITIAL_SEED) {
+    if (!m_ptr->main()->start_initial_seeding()) 
+      set_connection_type(CONNECTION_SEED);
+  }
 
   m_ptr->main()->start();
   m_ptr->main()->tracker_manager()->set_active(true);
@@ -109,7 +130,7 @@ Download::start2(int flags) {
 }
 
 void
-Download::stop2(int flags) {
+Download::stop(int flags) {
   if (!m_ptr->info()->is_active())
     return;
 
@@ -245,9 +266,9 @@ Download::file_list() const {
   return m_ptr->main()->file_list();
 }
 
-TrackerList
+TrackerList*
 Download::tracker_list() const {
-  return TrackerList(m_ptr->main()->tracker_manager());
+  return m_ptr->main()->tracker_manager()->container();
 }
 
 PeerList*
@@ -259,9 +280,20 @@ const PeerList*
 Download::peer_list() const {
   return m_ptr->main()->peer_list();
 }
+
 const TransferList*
 Download::transfer_list() const {
   return m_ptr->main()->delegator()->transfer_list();
+}
+
+ConnectionList*
+Download::connection_list() {
+  return m_ptr->main()->connection_list();
+}
+
+const ConnectionList*
+Download::connection_list() const {
+  return m_ptr->main()->connection_list();
 }
 
 Rate*
@@ -376,39 +408,22 @@ Download::set_bitfield(uint8_t* first, uint8_t* last) {
 }
 
 void
-Download::clear_range(uint32_t first, uint32_t last) {
-  if (m_ptr->hash_checker()->is_checked() || m_ptr->hash_checker()->is_checking() || m_ptr->main()->file_list()->bitfield()->empty())
+Download::update_range(int flags, uint32_t first, uint32_t last) {
+  if (m_ptr->hash_checker()->is_checked() ||
+      m_ptr->hash_checker()->is_checking() ||
+      m_ptr->main()->file_list()->bitfield()->empty())
     throw input_error("Download::clear_range(...) Download in invalid state.");
 
-  // Unset progress of any files.
-
-  m_ptr->hash_checker()->ranges().insert(first, last);
-  m_ptr->main()->file_list()->mutable_bitfield()->unset_range(first, last);
+  if (flags & update_range_recheck)
+    m_ptr->hash_checker()->ranges().insert(first, last);
+  
+  if (flags & (update_range_clear | update_range_recheck))
+    m_ptr->main()->file_list()->mutable_bitfield()->unset_range(first, last);
 }
  
 void
 Download::sync_chunks() {
   m_ptr->main()->chunk_list()->sync_chunks(ChunkList::sync_all | ChunkList::sync_force);
-}
-
-uint32_t
-Download::peers_min() const {
-  return m_ptr->main()->connection_list()->get_min_size();
-}
-
-uint32_t
-Download::peers_max() const {
-  return m_ptr->main()->connection_list()->get_max_size();
-}
-
-uint32_t
-Download::peers_connected() const {
-  return m_ptr->main()->connection_list()->size();
-}
-
-uint32_t
-Download::peers_not_connected() const {
-  return m_ptr->main()->peer_list()->available_list()->size();
 }
 
 uint32_t
@@ -450,31 +465,30 @@ uint32_t
 Download::uploads_max() const {
   return m_ptr->main()->upload_choke_manager()->max_unchoked();
 }
-  
+
 void
-Download::set_peers_min(uint32_t v) {
-  if (v > (1 << 16))
-    throw input_error("Min peer connections must be between 0 and 2^16.");
-  
-  m_ptr->main()->connection_list()->set_min_size(v);
-  m_ptr->main()->receive_connect_peers();
+Download::set_upload_throttle(Throttle* t) {
+  if (m_ptr->info()->is_active())
+    throw internal_error("Download::set_upload_throttle() called on active download.");
+
+  m_ptr->main()->set_upload_throttle(t->throttle_list());
 }
 
 void
-Download::set_peers_max(uint32_t v) {
-  if (v > (1 << 16))
-    throw input_error("Max peer connections must be between 0 and 2^16.");
+Download::set_download_throttle(Throttle* t) {
+  if (m_ptr->info()->is_active())
+    throw internal_error("Download::set_download_throttle() called on active download.");
 
-  m_ptr->main()->connection_list()->set_max_size(v);
+  m_ptr->main()->set_download_throttle(t->throttle_list());
 }
-
+  
 void
 Download::set_uploads_max(uint32_t v) {
-  if (v > (1 << 16))
-    throw input_error("Max uploads must be between 0 and 2^16.");
-
-  // For the moment, treat 0 as unlimited.
-  m_ptr->main()->upload_choke_manager()->set_max_unchoked(v == 0 ? ChokeManager::unlimited : v);
+  if (v > (1 << 16)) 
+    throw input_error("Max uploads must be between 0 and 2^16."); 
+	 	 
+  // For the moment, treat 0 as unlimited. 
+  m_ptr->main()->upload_choke_manager()->set_max_unchoked(v == 0 ? ChokeManager::unlimited : v); 
   m_ptr->main()->upload_choke_manager()->balance();
 }
 
@@ -492,6 +506,11 @@ Download::set_connection_type(ConnectionType t) {
   case CONNECTION_SEED:
     m_ptr->main()->connection_list()->slot_new_connection(&createPeerConnectionSeed);
     break;
+  case CONNECTION_INITIAL_SEED:
+    if (is_active() && m_ptr->main()->initial_seeding() == NULL)
+      throw input_error("Can't switch to initial seeding: download is active.");
+    m_ptr->main()->connection_list()->slot_new_connection(&createPeerConnectionInitialSeed);
+    break;
   default:
     throw input_error("torrent::Download::set_connection_type(...) received an unknown type.");
   };
@@ -504,26 +523,6 @@ Download::update_priorities() {
   m_ptr->receive_update_priorities();
 }
 
-void
-Download::peer_list(PList& pList) {
-  std::for_each(m_ptr->main()->connection_list()->begin(), m_ptr->main()->connection_list()->end(),
-                rak::bind1st(std::mem_fun<void,PList,PList::const_reference>(&PList::push_back), &pList));
-}
-
-Peer
-Download::peer_find(const std::string& id) {
-  ConnectionList::iterator itr =
-    std::find_if(m_ptr->main()->connection_list()->begin(), m_ptr->main()->connection_list()->end(),
-                 rak::equal(*HashString::cast_from(id), rak::on(std::mem_fun(&PeerConnectionBase::c_peer_info), std::mem_fun(&PeerInfo::id))));
-
-  return itr != m_ptr->main()->connection_list()->end() ? *itr : NULL;
-}
-
-void
-Download::disconnect_peer(Peer p) {
-  m_ptr->main()->connection_list()->erase(p.ptr(), 0);
-}
-
 sigc::connection
 Download::signal_download_done(Download::slot_void_type s) {
   return m_ptr->signal_download_done().connect(s);
@@ -532,16 +531,6 @@ Download::signal_download_done(Download::slot_void_type s) {
 sigc::connection
 Download::signal_hash_done(Download::slot_void_type s) {
   return m_ptr->signal_initial_hash().connect(s);
-}
-
-sigc::connection
-Download::signal_peer_connected(Download::slot_peer_type s) {
-  return m_ptr->signal_peer_connected().connect(s);
-}
-
-sigc::connection
-Download::signal_peer_disconnected(Download::slot_peer_type s) {
-  return m_ptr->signal_peer_disconnected().connect(s);
 }
 
 sigc::connection

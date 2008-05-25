@@ -41,11 +41,13 @@
 #include <rak/functional.h>
 #include <rak/string_manip.h>
 
+#include "download/download_info.h"
 #include "net/address_list.h"
 #include "torrent/connection_manager.h"
 #include "torrent/exceptions.h"
 #include "torrent/http.h"
 #include "torrent/object_stream.h"
+#include "torrent/tracker_list.h"
 
 #include "tracker_http.h"
 
@@ -54,8 +56,8 @@
 
 namespace torrent {
 
-TrackerHttp::TrackerHttp(DownloadInfo* info, const std::string& url) :
-  TrackerBase(info, url),
+TrackerHttp::TrackerHttp(TrackerList* parent, const std::string& url) :
+  Tracker(parent, url),
 
   m_get(Http::call_factory()),
   m_data(NULL) {
@@ -82,11 +84,11 @@ TrackerHttp::is_busy() const {
 }
 
 void
-TrackerHttp::send_state(DownloadInfo::State state, uint64_t down, uint64_t up, uint64_t left) {
+TrackerHttp::send_state(int state) {
   close();
 
-  if (m_info == NULL)
-    throw internal_error("TrackerHttp::send_state(...) does not have a valid m_info.");
+  if (m_parent == NULL)
+    throw internal_error("TrackerHttp::send_state(...) does not have a valid m_parent.");
 
   std::stringstream s;
   s.imbue(std::locale::classic());
@@ -94,16 +96,18 @@ TrackerHttp::send_state(DownloadInfo::State state, uint64_t down, uint64_t up, u
   char hash[61];
   char localId[61];
 
-  *rak::copy_escape_html(m_info->hash().begin(), m_info->hash().end(), hash) = '\0';
-  *rak::copy_escape_html(m_info->local_id().begin(), m_info->local_id().end(), localId) = '\0';
+  DownloadInfo* info = m_parent->info();
+
+  *rak::copy_escape_html(info->hash().begin(), info->hash().end(), hash) = '\0';
+  *rak::copy_escape_html(info->local_id().begin(), info->local_id().end(), localId) = '\0';
 
   s << m_url
     << (m_dropDeliminator ? '&' : '?')
     << "info_hash=" << hash
     << "&peer_id=" << localId;
 
-  if (m_info->key())
-    s << "&key=" << std::hex << std::setw(8) << std::setfill('0') << m_info->key() << std::dec;
+  if (m_parent->key())
+    s << "&key=" << std::hex << std::setw(8) << std::setfill('0') << m_parent->key() << std::dec;
 
   if (!m_trackerId.empty())
     s << "&trackerid=" << rak::copy_escape_html(m_trackerId);
@@ -114,18 +118,18 @@ TrackerHttp::send_state(DownloadInfo::State state, uint64_t down, uint64_t up, u
       !localAddress->sa_inet()->is_address_any())
     s << "&ip=" << localAddress->address_str();
 
-  if (m_info->is_compact())
+  if (info->is_compact())
     s << "&compact=1";
 
-  if (m_info->numwant() >= 0)
-    s << "&numwant=" << m_info->numwant();
+  if (m_parent->numwant() >= 0)
+    s << "&numwant=" << m_parent->numwant();
 
   if (manager->connection_manager()->listen_port())
     s << "&port=" << manager->connection_manager()->listen_port();
 
-  s << "&uploaded=" << up
-    << "&downloaded=" << down
-    << "&left=" << left;
+  s << "&uploaded=" << info->uploaded_adjusted()
+    << "&downloaded=" << info->completed_adjusted()
+    << "&left=" << info->slot_left()();
 
   switch(state) {
   case DownloadInfo::STARTED:
@@ -172,10 +176,12 @@ TrackerHttp::receive_done() {
   if (m_data == NULL)
     throw internal_error("TrackerHttp::receive_done() called on an invalid object");
 
-  if (!m_info->signal_tracker_dump().empty()) {
+  DownloadInfo* info = m_parent->info();
+
+  if (!info->signal_tracker_dump().empty()) {
     std::string dump = m_data->str();
 
-    m_info->signal_tracker_dump().emit(m_get->url(), dump.c_str(), dump.size());
+    info->signal_tracker_dump().emit(m_get->url(), dump.c_str(), dump.size());
   }
 
   Object b;
@@ -206,8 +212,7 @@ TrackerHttp::receive_done() {
   if (b.has_key_value("complete") && b.has_key_value("incomplete")) {
     m_scrapeComplete   = std::max<int64_t>(b.get_key_value("complete"), 0);
     m_scrapeIncomplete = std::max<int64_t>(b.get_key_value("incomplete"), 0);
-
-    m_scrapeTimeLast = cachedTime;
+    m_scrapeTimeLast   = rak::timer::current().seconds();
   }
 
   if (b.has_key_value("downloaded"))
@@ -229,14 +234,14 @@ TrackerHttp::receive_done() {
   }
 
   close();
-  m_slotSuccess(this, &l);
+  m_parent->receive_success(this, &l);
 }
 
 void
 TrackerHttp::receive_failed(std::string msg) {
   // Does the order matter?
   close();
-  m_slotFailed(this, msg);
+  m_parent->receive_failed(this, msg);
 }
 
 }

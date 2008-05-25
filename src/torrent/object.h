@@ -50,11 +50,27 @@ namespace torrent {
 
 class LIBTORRENT_EXPORT Object {
 public:
-  typedef int64_t                         value_type;
-  typedef std::string                     string_type;
-  typedef std::list<Object>               list_type;
-  typedef std::map<std::string, Object>   map_type;
-  typedef map_type::key_type              key_type;
+  typedef int64_t                           value_type;
+  typedef std::string                       string_type;
+  typedef std::list<Object>                 list_type;
+  typedef std::map<std::string, Object>     map_type;
+  typedef map_type::key_type                key_type;
+
+  typedef list_type::iterator               list_iterator;
+  typedef list_type::const_iterator         list_const_iterator;
+  typedef list_type::reverse_iterator       list_reverse_iterator;
+  typedef list_type::const_reverse_iterator list_const_reverse_iterator;
+
+  typedef map_type::iterator                map_iterator;
+  typedef map_type::const_iterator          map_const_iterator;
+  typedef map_type::reverse_iterator        map_reverse_iterator;
+  typedef map_type::const_reverse_iterator  map_const_reverse_iterator;
+
+  typedef std::pair<map_iterator, bool>     map_insert_type;
+
+  static const uint32_t mask_type     = 0xff;
+  static const uint32_t mask_internal = 0xffff;
+  static const uint32_t mask_public   = ~mask_internal;
 
   enum type_type {
     TYPE_NONE,
@@ -64,24 +80,38 @@ public:
     TYPE_MAP
   };
 
-  Object()                     : m_type(TYPE_NONE) {}
-  Object(const value_type v)   : m_type(TYPE_VALUE), m_value(v) {}
-  Object(const char* s)        : m_type(TYPE_STRING), m_string(new string_type(s)) {}
-  Object(const string_type& s) : m_type(TYPE_STRING), m_string(new string_type(s)) {}
+  Object()                     : m_flags(TYPE_NONE) {}
+  Object(const value_type v)   : m_flags(TYPE_VALUE), m_value(v) {}
+  Object(const char* s)        : m_flags(TYPE_STRING), m_string(new string_type(s)) {}
+  Object(const string_type& s) : m_flags(TYPE_STRING), m_string(new string_type(s)) {}
   Object(const Object& b);
 
-  explicit Object(type_type t);
-  
   ~Object() { clear(); }
 
+  // Move this out of the class namespace, call them create_object_.
+  static Object       create_value()  { return Object(value_type()); }
+  static Object       create_string() { return Object(string_type()); }
+  static Object       create_list()   { Object tmp; tmp.m_flags = TYPE_LIST; tmp.m_list = new list_type(); return tmp; }
+  static Object       create_map()    { Object tmp; tmp.m_flags = TYPE_MAP;  tmp.m_map  = new map_type();  return tmp; }
+
+  // Clear should probably not be inlined due to size and not being
+  // optimized away in pretty much any case. Might not work well in
+  // cases where we pass constant rvalues.
   void                clear();
 
-  type_type           type() const                            { return m_type; }
+  type_type           type() const                            { return (type_type)(m_flags & mask_type); }
 
-  bool                is_value() const                        { return m_type == TYPE_VALUE; }
-  bool                is_string() const                       { return m_type == TYPE_STRING; }
-  bool                is_list() const                         { return m_type == TYPE_LIST; }
-  bool                is_map() const                          { return m_type == TYPE_MAP; }
+  uint32_t            flags() const                           { return m_flags; }
+
+  void                set_flags(uint32_t f)                   { m_flags |= f & mask_public; }
+  void                unset_flags(uint32_t f)                 { m_flags &= ~(f & mask_public); }
+
+  // Add functions for setting/clearing the public flags.
+
+  bool                is_value() const                        { return type() == TYPE_VALUE; }
+  bool                is_string() const                       { return type() == TYPE_STRING; }
+  bool                is_list() const                         { return type() == TYPE_LIST; }
+  bool                is_map() const                          { return type() == TYPE_MAP; }
 
   value_type&         as_value()                              { check_throw(TYPE_VALUE); return m_value; }
   const value_type&   as_value() const                        { check_throw(TYPE_VALUE); return m_value; }
@@ -106,27 +136,39 @@ public:
 
   Object&             get_key(const key_type& k);
   const Object&       get_key(const key_type& k) const;
+  Object&             get_key(const char* k);
+  const Object&       get_key(const char* k) const;
 
-  value_type&         get_key_value(const key_type& k)               { return get_key(k).as_value(); }
-  const value_type&   get_key_value(const key_type& k) const         { return get_key(k).as_value(); }
+  template <typename T> value_type&        get_key_value(const T& k)        { return get_key(k).as_value(); }
+  template <typename T> const value_type&  get_key_value(const T& k) const  { return get_key(k).as_value(); }
 
-  string_type&        get_key_string(const key_type& k)              { return get_key(k).as_string(); }
-  const string_type&  get_key_string(const key_type& k) const        { return get_key(k).as_string(); }
+  template <typename T> string_type&       get_key_string(const T& k)       { return get_key(k).as_string(); }
+  template <typename T> const string_type& get_key_string(const T& k) const { return get_key(k).as_string(); }
 
-  list_type&          get_key_list(const key_type& k)                { return get_key(k).as_list(); }
-  const list_type&    get_key_list(const key_type& k) const          { return get_key(k).as_list(); }
+  template <typename T> list_type&         get_key_list(const T& k)         { return get_key(k).as_list(); }
+  template <typename T> const list_type&   get_key_list(const T& k) const   { return get_key(k).as_list(); }
 
-  map_type&           get_key_map(const key_type& k)                 { return get_key(k).as_map(); }
-  const map_type&     get_key_map(const key_type& k) const           { return get_key(k).as_map(); }
+  template <typename T> map_type&          get_key_map(const T& k)          { return get_key(k).as_map(); }
+  template <typename T> const map_type&    get_key_map(const T& k) const    { return get_key(k).as_map(); }
 
   Object&             insert_key(const key_type& k, const Object& b) { check_throw(TYPE_MAP); return (*m_map)[k] = b; }
+
+  // 'insert_preserve_*' inserts the object 'b' if the key 'k' does
+  // not exist, else it returns the old entry. The type specific
+  // versions also require the old entry to be of the same type.
+  //
+  // Consider making insert_preserve_* return std::pair<Foo*,bool> or
+  // something similar.
+  map_insert_type     insert_preserve_any(const key_type& k, const Object& b) { check_throw(TYPE_MAP); return m_map->insert(map_type::value_type(k, b)); }
+  map_insert_type     insert_preserve_type(const key_type& k, Object& b);
+  map_insert_type     insert_preserve_copy(const key_type& k, Object b) { return insert_preserve_type(k, b); }
+
   void                erase_key(const key_type& k)                   { check_throw(TYPE_MAP); m_map->erase(k); }
 
   Object&             insert_front(const Object& b)                  { check_throw(TYPE_LIST); return *m_list->insert(m_list->begin(), b); }
   Object&             insert_back(const Object& b)                   { check_throw(TYPE_LIST); return *m_list->insert(m_list->end(), b); }
 
   // Copy and merge operations:
-
   Object&             move(Object& b);
   Object&             swap(Object& b);
 
@@ -137,10 +179,13 @@ public:
   Object&             operator = (const Object& b);
 
  private:
-  inline bool         check(map_type::const_iterator itr, type_type t) const { return itr != m_map->end() && itr->second.m_type == t; }
-  inline void         check_throw(type_type t) const                         { if (t != m_type) throw bencode_error("Wrong object type."); }
+  // TMP to kill bad uses.
+  //  explicit Object(type_type t);
 
-  type_type           m_type;
+  inline bool         check(map_type::const_iterator itr, type_type t) const { return itr != m_map->end() && itr->second.type() == t; }
+  inline void         check_throw(type_type t) const                         { if (t != type()) throw bencode_error("Wrong object type."); }
+
+  uint32_t            m_flags;
 
   union {
     int64_t             m_value;
@@ -151,9 +196,9 @@ public:
 };
 
 inline
-Object::Object(const Object& b) : m_type(b.m_type) {
-  switch (m_type) {
-  case TYPE_NONE:  break;
+Object::Object(const Object& b) : m_flags(b.type()) {
+  switch (type()) {
+  case TYPE_NONE:   break;
   case TYPE_VALUE:  m_value = b.m_value; break;
   case TYPE_STRING: m_string = new string_type(*b.m_string); break;
   case TYPE_LIST:   m_list = new list_type(*b.m_list); break;
@@ -161,22 +206,9 @@ Object::Object(const Object& b) : m_type(b.m_type) {
   }
 }
 
-inline
-Object::Object(type_type t) :
-  m_type(t) {
-
-  switch (m_type) {
-  case TYPE_NONE:   break;
-  case TYPE_VALUE:  m_value = value_type(); break;
-  case TYPE_STRING: m_string = new string_type(); break;
-  case TYPE_LIST:   m_list = new list_type(); break;
-  case TYPE_MAP:    m_map = new map_type(); break;
-  }
-}
-
 inline void
 Object::clear() {
-  switch (m_type) {
+  switch (type()) {
   case TYPE_NONE:
   case TYPE_VALUE:  break;
   case TYPE_STRING: delete m_string; break;
@@ -184,7 +216,8 @@ Object::clear() {
   case TYPE_MAP:    delete m_map; break;
   }
 
-  m_type = TYPE_NONE;
+  // Only clear type?
+  m_flags = TYPE_NONE;
 }
 
 }
