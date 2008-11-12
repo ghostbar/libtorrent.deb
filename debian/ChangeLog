@@ -1,3 +1,11 @@
+2008-10-15  Jari Sundell <jaris@student.matnat.uiu.no>
+
+	* Added a work-around for the stdin kqueue bug in MacOSX. Original
+	patch by Josef Drexler.
+
+	* Numerous bug-fixes and patches by Josef Drexler.
+
+
 2008-05-13  Jari Sundell <jaris@student.matnat.uio.no>
 
 	* Fixed EINTR handling in execute command. Patch by anonymous.
