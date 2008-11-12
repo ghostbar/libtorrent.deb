@@ -46,7 +46,7 @@ namespace torrent {
 
 class LIBTORRENT_EXPORT PollEPoll : public torrent::Poll {
 public:
-  typedef std::vector<uint32_t> Table;
+  typedef std::vector<std::pair<uint32_t, Event*> > Table;
 
   static PollEPoll*   create(int maxOpenSockets);
   virtual ~PollEPoll();
@@ -62,6 +62,9 @@ public:
   // from open(...) is called to close(...) returns.
   virtual void        open(torrent::Event* event);
   virtual void        close(torrent::Event* event);
+
+  // torrent::Event::get_fd() was closed outside of our control.
+  virtual void        closed(torrent::Event* event);
 
   // Functions for checking whetever the torrent::Event is listening to r/w/e?
   virtual bool        in_read(torrent::Event* event);

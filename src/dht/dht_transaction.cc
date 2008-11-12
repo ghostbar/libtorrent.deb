@@ -46,7 +46,7 @@
 namespace torrent {
 
 DhtSearch::DhtSearch(const HashString& target, const DhtBucket& contacts)
-  : base_type(dht_compare_closer(target)),
+  : base_type(dht_compare_closer(m_target = target)),
     m_pending(0),
     m_contacted(0),
     m_replied(0),
@@ -252,7 +252,7 @@ DhtAnnounce::start_announce() {
 }
 
 void 
-DhtAnnounce::receive_peers(const std::string& peers) {
+DhtAnnounce::receive_peers(const Object& peers) {
   m_tracker->receive_peers(peers);
 }
 
