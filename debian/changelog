@@ -3,7 +3,7 @@ libtorrent (0.12.4-1~b1) experimental; urgency=low
   * New Upstream Version
   * Updated debian/ChangeLog file.
 
- -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 19 Nov 2008 13:42:50 -0430
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 19 Nov 2008 13:54:25 -0430
 
 libtorrent (0.12.3-1) experimental; urgency=low
 
