@@ -1,4 +1,10 @@
-libtorrent (0.12.3-1~b2) experimental; urgency=low
+libtorrent (0.12.4-1) UNRELEASED; urgency=low
+
+  * New Upstream Version
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 19 Nov 2008 13:42:50 -0430
+
+libtorrent (0.12.3-1) experimental; urgency=low
 
   * New upstream release.
   * Patches are applied from upstream, deleted.
