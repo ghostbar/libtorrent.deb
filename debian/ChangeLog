@@ -1,3 +1,57 @@
+2008-11-19  Jari Sundell <sundell.software@gmail.com>
+
+	* Work-around for OpenBSD's broken sys/event.h, which fails to compile
+	if it's the first (or only) included header. (Ticket #1470)
+
+	* Fixes compilation with old libcurl versions. (Ticket #1471)
+
+	* Fix compile error on systems that lack mincore(2).
+
+	* Fixes a crash in epoll due to libcurl/c-ares bug:
+	PollEPoll::modify(...) epoll_ctl call failed.
+
+	* Enforce an http transfer timeout when libcurl fails to honor
+	it. Also set a 5-minute timeout for (previously unlimited) torrent
+	transfers and fixes the argument type for curl_easy_setopt values.
+
+	* Allows bandwidth throttles to work without floating point support.
+
+	* Added the 'd.add_peer=host[:port]' command to manually add a peer
+	(not for torrents marked "private"), port 6881 is the default.
+
+	* Allows banning the selected peer with "B". No unbanning is possible
+	yet.
+
+	All the above patches were written by Josef Drexler.
+
+
+	* Added system.method.{insert,erase} commands that allows
+	user-specified commands. E.g "system.method.insert=foo,print=Bar".
+
+	* Differentiate between commands that have no target, and those that
+	take generic targets, when using XMLRPC.
+
+	* Added 'event.download.inserted_{new,session}' that are triggered
+	when a new or a session torrent is added. Ticket #1516.
+
+	* Added 'system.method.get', 'ui.current_view.set' and 'group.insert'
+	commands.
+
+	* Enabled different ratio settings for different groups of
+	downloads.
+
+	* Added 'view.persistance' command that makes downloads inserted into
+	that view persist across sessions. Only call on user-created views.
+
+	* Added	'ratio.*' commands that call the 'group.seeding.ratio.*'
+	equivalents.
+
+	* Changed torrent::DownloadList::close_directly() so doesn't save the
+	session if the underlying file/directory has been moved or
+	removed. This change, in addition to calling 'd.set_directory=' before
+	'execute=mv,...', as previously shown in the examples, will make
+	rtorrent behave correctly when 'check_hash=no' is set. 
+
 2008-10-15  Jari Sundell <jaris@student.matnat.uiu.no>
 
 	* Added a work-around for the stdin kqueue bug in MacOSX. Original

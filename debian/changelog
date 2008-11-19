@@ -1,6 +1,7 @@
-libtorrent (0.12.4-1) UNRELEASED; urgency=low
+libtorrent (0.12.4-1~b1) experimental; urgency=low
 
   * New Upstream Version
+  * Updated debian/ChangeLog file.
 
  -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 19 Nov 2008 13:42:50 -0430
 
@@ -14,6 +15,7 @@ libtorrent (0.12.3-1) experimental; urgency=low
   * Refreshed debian/copyright.
   * Removed Arnaud Andesi from Uploaders.
   * Removed XS- From Vcs fields and updated these fields.
+  * Updated debian/ChangeLog file.
 
  -- Jose Luis Rivas <ghostbar38@gmail.com>  Mon, 17 Nov 2008 23:48:01 -0430
 
