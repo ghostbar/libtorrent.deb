@@ -1,50 +1,107 @@
---- TODAY ---
+* Work-around for OpenBSD's broken sys/event.h, which fails to compile
+if it's the first (or only) included header. (Ticket #1470)
 
-* Kanjis
+* Fixes compilation with old libcurl versions. (Ticket #1471)
 
-* Legge ut på senga ting du skal ha med deg til japan.
+* Fix compile error on systems that lack mincore(2).
 
-* Backup av ting.
+* Fixes a crash in epoll due to libcurl/c-ares bug:
+PollEPoll::modify(...) epoll_ctl call failed.
 
+* Enforce an http transfer timeout when libcurl fails to honor
+it. Also set a 5-minute timeout for (previously unlimited) torrent
+transfers and fixes the argument type for curl_easy_setopt values.
 
-== I morgen ==
+* Allows bandwidth throttles to work without floating point support.
 
-Få sendt mail til UIO angående de papirene fra JIU.
+* Added the 'd.add_peer=host[:port]' command to manually add a peer
+(not for torrents marked "private"), port 6881 is the default.
 
+* Allows banning the selected peer with "B". No unbanning is possible
+yet.
 
-== backup ==
-
-backup bilder
-
-backup diverse
-
-
-
-- omiage list -
-
-ichiyama-sensei - makrell i tomat? Norsk manga
-
-noen spurte etter norsk sjokolade, skaff flere melkesjokolader
-
-momo-chan - hva som helst
-
-yuki - hmm...? hun er interesert i sansou
-
-til YUUNA og MARIE ++, ikke glemme dette!!! Kan du finne en gammel mumie-troll book?
+All the above patches were written by Josef Drexler.
 
 
-- kaimono list -
+* Added system.method.{insert,erase} commands that allows
+user-specified commands. E.g "system.method.insert=foo,print=Bar".
 
-Masse tyrkisk pepper, og lakris generelt
+* Differentiate between commands that have no target, and those that
+take generic targets, when using XMLRPC.
 
-Spoer mamma om det derre snorke-greiene.
+* Added 'event.download.inserted_{new,session}' that are triggered
+when a new or a session torrent is added. Ticket #1516.
 
-- todo -
+* Added 'system.method.get', 'ui.current_view.set' and 'group.insert'
+commands.
 
-rydd opp i harddisken og scramble unused space
+* Enabled different ratio settings for different groups of
+downloads.
+
+* Added 'view.persistance' command that makes downloads inserted into
+that view persist across sessions. Only call on user-created views.
+
+* Added 'ratio.*' commands that call the 'group.seeding.ratio.*'
+equivalents.
+
+* Changed torrent::DownloadList::close_directly() so doesn't save the
+session if the underlying file/directory has been moved or
+removed. This change, in addition to calling 'd.set_directory=' before
+'execute=mv,...', as previously shown in the examples, will make
+rtorrent behave correctly when 'check_hash=no' is set.
 
 
 
+- Add ratio handling page to the release notes. Also, method.set_key
+  and d.set_directory.
+
+
+
+- Firmware update for kamera.
+
+- Laanekassen, mona.
+
+
+
+
+sakura
+ueno
+harajuku
+
+
+
+
+- Create the pre-parsed commands at the same time as the new syntax.
+
+- Use a flag to mark erased commands, rather than removing them from
+  the map, as that would make it impossible to support storing of
+  iterators.
+
+- Placement new/delete in Object.
+
+
+
+
+--- User-Defined commands ---
+
+  Allow for optimizing by pre-parseing and possibly using
+  placement-new to keep locality.
+
+
+
+--- Start work on a new command thing ---
+
+* For now, differenciate by starting with a pre-determined char.
+
+* It should support ranges, and/or stop on \0. (End range as a NULL pointer just keep us going until we hit that char)
+
+* Consider if new-line, etc, should have any meaning.
+
+* Either use foo_function(arg1, arg2, ...), or {foo_function, arg1, arg2}.
+
+
+* Detect when dropping offline, getting online, fully/partially
+  utilizing network bandwidth.
 
 
 * Add a timer so that we pace our http requests instead of flooding
@@ -76,7 +133,7 @@ d.multicall main p.multicall=,p.get_address=
   in the download scheduler.
 
 
-- A bug caused by trying to download a torreng, not getting any peers
+- A bug caused by trying to download a torrent, not getting any peers
   so it only makes the zero-length files, then restarting the
   client. Should require ^E to continue.
 
@@ -100,8 +157,6 @@ error code hack probably isn't right.
 // Missing file, skip the hash check. <- this should skip all chunks
 touched by that file.
 
-
-- add Command::call_void?
 
 - Make the command_map_data_type typedef's use a common template parameter.
 
@@ -139,9 +194,6 @@ to a new queue, and make a couple of helper functions.
 
 - Add a command the cleans up strings for proper sorting.
 
-
-? Then make it so that the Views are populated based completely on
-  events, rather than filtering every single type of event.
 
 - Make filter_on call repeatedly with a single string, rather than
   accepting a list.
@@ -184,12 +236,7 @@ to a new queue, and make a couple of helper functions.
 
 
 
-- Add the queue View and make it work on magic faire dust and old socks.
-
 - Make upload/download slots work on the heuristics of the scheudlers.
-
-
-- Commit dht-align patch with comment on alignment req.
 
 
 - Add XMLRPC version information?
@@ -221,23 +268,6 @@ to a new queue, and make a couple of helper functions.
 
 
 
-=== Move DL slots to pure commands ===
-
-ui/download_list.cc: Change the erase slot to a command which is
-internal, and this command needs to be possible to enable/disable by
-setting/unsetting a DL target. (Unless we access DL through
-control->ui() instead?)
-
----
-
-=== Improve command efficiency on multiple calls with different targets ===
-
-- Create a way to convert a string to a set of command objects and
-  arguments, which is not tied to any target. This would not expand
-  any $ in arguments.
-
----
-
 === Pass the target_type thing to all the CommandSlot<...> functions ===
 
 - Remove CommandSlot<void> specialisation and use an in-class template
@@ -249,8 +279,6 @@ CommandMap.
 
 ---
 
-
-- Make the paypal link more prominent.
 
 design of everyday things
 
