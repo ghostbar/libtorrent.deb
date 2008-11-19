@@ -1,4 +1,4 @@
-libtorrent (0.12.3-1~b1) experimental; urgency=low
+libtorrent (0.12.3-1~b2) experimental; urgency=low
 
   * New upstream release.
   * Patches are applied from upstream, deleted.
@@ -6,6 +6,8 @@ libtorrent (0.12.3-1~b1) experimental; urgency=low
   * Bumped to 3.8.0 Standards-Version
   * Bumped libtorrent10 to libtorrent11 by SONAME version.
   * Refreshed debian/copyright.
+  * Removed Arnaud Andesi from Uploaders.
+  * Removed XS- From Vcs fields and updated these fields.
 
  -- Jose Luis Rivas <ghostbar38@gmail.com>  Mon, 17 Nov 2008 23:48:01 -0430
 
