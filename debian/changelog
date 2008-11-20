@@ -1,4 +1,4 @@
-libtorrent (0.12.3-1) experimental; urgency=low
+libtorrent (0.12.3-1) unstable; urgency=low
 
   * New upstream release.
   * Patches for fixing >= gcc-4.3 are applied from upstream (Closes: #505355).
@@ -9,6 +9,8 @@ libtorrent (0.12.3-1) experimental; urgency=low
   * Removed Arnaud Andesi from Uploaders.
   * Removed XS- From Vcs fields and updated these fields.
   * Updated debian/ChangeLog file.
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 19 Nov 2008 22:09:04 -0430
 
 libtorrent (0.11.9-1.1) unstable; urgency=low
 
