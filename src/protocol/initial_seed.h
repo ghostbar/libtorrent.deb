@@ -34,41 +34,50 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#ifndef LIBTORRENT_NET_THROTTLE_MANAGER_H
-#define LIBTORRENT_NET_THROTTLE_MANAGER_H
+#ifndef LIBTORRENT_PROTOCOL_INITIAL_SEED_H
+#define LIBTORRENT_PROTOCOL_INITIAL_SEED_H
 
-#include <rak/timer.h>
-
-#include "globals.h"
+#include "download/download_main.h"
 
 namespace torrent {
 
-class ThrottleList;
-
-class ThrottleManager {
+class InitialSeeding {
 public:
+  InitialSeeding(DownloadMain* download);
+  ~InitialSeeding();
 
-  ThrottleManager();
-  ~ThrottleManager();
+  static const uint32_t no_offer = ~uint32_t();
 
-  uint32_t            max_rate() const         { return m_maxRate; }
-  void                set_max_rate(uint32_t v);
+  void                new_peer(PeerConnectionBase* pcb);
 
-  ThrottleList*       throttle_list()          { return m_throttleList; }
+  // Chunk was seen distributed to a peer in the swarm.
+  void                chunk_seen(uint32_t index, PeerConnectionBase* pcb);
+
+  // Returns chunk we may offer the peer or no_offer if none.
+  uint32_t            chunk_offer(PeerConnectionBase* pcb, uint32_t indexDone);
+
+  // During the second stage (seeding rare chunks), return
+  // false if given chunk is already well-seeded now. True otherwise.
+  bool                should_upload(uint32_t index);
 
 private:
-  void                receive_tick();
+  static PeerInfo* const chunk_unsent;  // Chunk never sent to anyone.
+  static PeerInfo* const chunk_unknown; // Peer has chunk, we don't know who we sent it to.
+  static PeerInfo* const chunk_done;    // Chunk properly distributed by peer.
 
-  uint32_t            calculate_min_chunk_size() const;
-  uint32_t            calculate_max_chunk_size() const;
-  uint32_t            calculate_interval() const;
+  uint32_t            find_next(bool secondary, PeerConnectionBase* pcb);
 
-  uint32_t            m_maxRate;
+  bool                valid_peer(PeerInfo* peer);
+  void                clear_peer(PeerInfo* peer);
+  void                chunk_complete(uint32_t index, PeerConnectionBase* pcb);
 
-  ThrottleList*       m_throttleList;
+  void                complete(PeerConnectionBase* pcb);
+  void                unblock_all();
 
-  rak::timer          m_timeLastTick;
-  rak::priority_item  m_taskTick;
+  uint32_t            m_nextChunk;
+  uint32_t            m_chunksLeft;
+  DownloadMain*       m_download;
+  PeerInfo**          m_peerChunks;
 };
 
 }

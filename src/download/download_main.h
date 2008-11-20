@@ -43,7 +43,6 @@
 
 #include "globals.h"
 
-#include "connection_list.h"
 #include "download_info.h"
 #include "delegator.h"
 
@@ -60,11 +59,13 @@ class ChunkSelector;
 class ChunkStatistics;
 
 class ChokeManager;
+class ConnectionList;
 class DownloadWrapper;
 class HandshakeManager;
 class TrackerManager;
 class DownloadInfo;
 class ThrottleList;
+class InitialSeeding;
 
 class DownloadMain {
 public:
@@ -74,7 +75,7 @@ public:
   DownloadMain();
   ~DownloadMain();
 
-  void                open();
+  void                open(int flags);
   void                close();
 
   void                start();
@@ -95,6 +96,10 @@ public:
 
   have_queue_type*    have_queue()                               { return &m_haveQueue; }
 
+  InitialSeeding*     initial_seeding()                          { return m_initialSeeding; }
+  bool                start_initial_seeding();
+  void                initial_seeding_done(PeerConnectionBase* pcb);
+
   ConnectionList*     connection_list()                          { return m_connectionList; }
   FileList*           file_list()                                { return &m_fileList; }
   PeerList*           peer_list()                                { return &m_peerList; }
@@ -105,7 +110,7 @@ public:
   ThrottleList*       download_throttle()                        { return m_downloadThrottle; }
   void                set_download_throttle(ThrottleList* t)     { m_downloadThrottle = t; }
 
-  DataBuffer          get_ut_pex(bool initial)                   { return initial ? m_ut_pex_initial : m_ut_pex_delta; }
+  DataBuffer          get_ut_pex(bool initial)                   { return (initial ? m_ut_pex_initial : m_ut_pex_delta).clone(); }
 
   bool                want_pex_msg()                             { return m_info->is_pex_active() && m_peerList.available_list()->want_more(); }; 
 
@@ -157,6 +162,7 @@ private:
 
   Delegator           m_delegator;
   have_queue_type     m_haveQueue;
+  InitialSeeding*     m_initialSeeding;
 
   ConnectionList*     m_connectionList;
   FileList            m_fileList;

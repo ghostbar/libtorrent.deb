@@ -61,7 +61,6 @@ AC_DEFUN([TORRENT_CHECK_EPOLL], [
     ])
 ])
 
-
 AC_DEFUN([TORRENT_WITHOUT_EPOLL], [
   AC_ARG_WITH(epoll,
     [  --without-epoll         Do not check for epoll support.],
@@ -75,12 +74,69 @@ AC_DEFUN([TORRENT_WITHOUT_EPOLL], [
 ])
 
 
+AC_DEFUN([TORRENT_CHECK_KQUEUE], [
+  AC_MSG_CHECKING(for kqueue support)
+
+  AC_LINK_IFELSE(
+    [[#include <sys/event.h>
+      int main() {
+        int fd = kqueue();
+        return 0;
+      }
+    ]],
+    [
+      AC_DEFINE(USE_KQUEUE, 1, Use kqueue.)
+      AC_MSG_RESULT(yes)
+    ], [
+      AC_MSG_RESULT(no)
+    ])
+])
+
+AC_DEFUN([TORRENT_CHECK_KQUEUE_SOCKET_ONLY], [
+  AC_MSG_CHECKING(whether kqueue supports pipes and ptys)
+
+  AC_RUN_IFELSE(
+    [[#include <fcntl.h>
+      #include <stdlib.h>
+      #include <unistd.h>
+      #include <sys/event.h>
+      #include <sys/time.h>
+      int main() {
+        struct kevent ev[2], ev_out[2];
+        struct timespec ts = { 0, 0 };
+        int pfd[2], pty[2], kfd, n;
+        char buffer[9001];
+        if (pipe(pfd) == -1) return 1;
+        if (fcntl(pfd[1], F_SETFL, O_NONBLOCK) == -1) return 2;
+        while ((n = write(pfd[1], buffer, sizeof(buffer))) == sizeof(buffer));
+        if ((pty[0]=posix_openpt(O_RDWR | O_NOCTTY)) == -1) return 3;
+        if ((pty[1]=grantpt(pty[0])) == -1) return 4;
+        EV_SET(ev+0, pfd[1], EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, NULL);
+        EV_SET(ev+1, pty[1], EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
+        if ((kfd = kqueue()) == -1) return 5;
+        if ((n = kevent(kfd, ev, 2, NULL, 0, NULL)) == -1) return 6;
+        if (ev_out[0].flags & EV_ERROR) return 7;
+        if (ev_out[1].flags & EV_ERROR) return 8;
+        read(pfd[0], buffer, sizeof(buffer));
+        if ((n = kevent(kfd, NULL, 0, ev_out, 2, &ts)) < 1) return 9;
+        return 0;
+      }
+    ]],
+    [
+      AC_MSG_RESULT(yes)
+    ], [
+      AC_DEFINE(KQUEUE_SOCKET_ONLY, 1, kqueue only supports sockets.)
+      AC_MSG_RESULT(no)
+    ])
+])
+
 AC_DEFUN([TORRENT_WITH_KQUEUE], [
   AC_ARG_WITH(kqueue,
     [  --with-kqueue           enable kqueue. [[default=no]]],
     [
         if test "$withval" = "yes"; then
-            AC_DEFINE(USE_KQUEUE, 1, Enable kqueue.)
+          TORRENT_CHECK_KQUEUE
+          TORRENT_CHECK_KQUEUE_SOCKET_ONLY
         fi
     ])
 ])
@@ -291,6 +347,26 @@ AC_DEFUN([TORRENT_WITH_ADDRESS_SPACE], [
     ])
 ])
 
+AC_DEFUN([TORRENT_CHECK_TR1], [
+  AC_LANG_PUSH(C++)
+  AC_MSG_CHECKING(for TR1 support)
+
+  AC_COMPILE_IFELSE(
+    [[#include <tr1/unordered_map>
+      class Foo;
+      typedef std::tr1::unordered_map<Foo*, int> Bar;
+    ]],
+    [
+      AC_MSG_RESULT(yes)
+      AC_DEFINE(HAVE_TR1, 1, Define to 1 if your C++ library supports the extensions from Technical Report 1)
+    ],
+    [
+      AC_MSG_RESULT(no)
+    ]
+  )
+
+  AC_LANG_POP(C++)
+])
 
 AC_DEFUN([TORRENT_WITH_FASTCGI], [
   AC_ARG_WITH(fastcgi,
@@ -349,9 +425,15 @@ AC_DEFUN([TORRENT_WITH_XMLRPC_C], [
       AC_MSG_RESULT(no)
 
     else
-      if eval xmlrpc-c-config --version 2>/dev/null >/dev/null; then
-        CXXFLAGS="$CXXFLAGS `xmlrpc-c-config --cflags server-util`"
-        LIBS="$LIBS `xmlrpc-c-config server-util --libs`"
+      if test "$withval" = "yes"; then
+        xmlrpc_cc_prg="xmlrpc-c-config"
+      else
+        xmlrpc_cc_prg="$withval"
+      fi
+      
+      if eval $xmlrpc_cc_prg --version 2>/dev/null >/dev/null; then
+        CXXFLAGS="$CXXFLAGS `$xmlrpc_cc_prg --cflags server-util`"
+        LIBS="$LIBS `$xmlrpc_cc_prg server-util --libs`"
 
         AC_TRY_LINK(
         [ #include <xmlrpc-c/server.h>

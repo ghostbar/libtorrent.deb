@@ -72,6 +72,9 @@ HashTorrent::clear() {
   m_outstanding = -1;
   m_position = 0;
   m_errno = 0;
+
+  // Correct?
+  rak::priority_queue_erase(&taskScheduler, &m_delayChecked);
 }
 
 bool
@@ -159,7 +162,7 @@ HashTorrent::queue(bool quick) {
       if (handle.is_valid())
         return m_chunkList->release(&handle);
       
-      if (handle.error_number().is_valid())
+      if (handle.error_number().is_valid() && handle.error_number().value() != rak::error_number::e_noent)
         return;
 
       m_position++;
@@ -169,7 +172,7 @@ HashTorrent::queue(bool quick) {
       // If the error number is not valid, then we've just encountered a
       // file that hasn't be created/resized. Which means we ignore it
       // when doing initial hashing.
-      if (handle.error_number().is_valid()) {
+      if (handle.error_number().is_valid() && handle.error_number().value() != rak::error_number::e_noent) {
         if (handle.is_valid())
           throw internal_error("HashTorrent::queue() error, but handle.is_valid().");
 
@@ -185,12 +188,15 @@ HashTorrent::queue(bool quick) {
 
         m_errno = handle.error_number().value();
 
-        rak::priority_queue_erase(&taskScheduler, &m_delayChecked);
+//         rak::priority_queue_erase(&taskScheduler, &m_delayChecked);
         rak::priority_queue_insert(&taskScheduler, &m_delayChecked, cachedTime);
         return;
       }
 
       m_position++;
+
+      if (!handle.is_valid() && !handle.error_number().is_valid())
+        throw internal_error("Hash torrent errno == 0.");
 
       // Missing file, skip the hash check.
       if (!handle.is_valid())
@@ -206,7 +212,7 @@ HashTorrent::queue(bool quick) {
     // started again during the delay it won't cause an exception.
     rak::priority_queue_erase(&taskScheduler, &m_delayChecked);
     rak::priority_queue_insert(&taskScheduler, &m_delayChecked, cachedTime);
-  }
+   }
 }
 
 }

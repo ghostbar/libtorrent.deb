@@ -40,12 +40,12 @@
 #include <sstream>
 
 #include "download/available_list.h"
-#include "download/connection_list.h"
 #include "download/download_main.h"
 #include "protocol/peer_connection_base.h"
 #include "torrent/connection_manager.h"
 #include "torrent/object.h"
 #include "torrent/object_stream.h"
+#include "torrent/peer/connection_list.h"
 #include "torrent/peer/peer_info.h"
 #include "tracker/tracker_http.h"
 #include "manager.h"
@@ -103,15 +103,15 @@ ProtocolExtension::unset_local_enabled(int t) {
 
 DataBuffer
 ProtocolExtension::generate_handshake_message() {
-  Object map(Object::TYPE_MAP);
-  Object message(Object::TYPE_MAP);
+  Object map = Object::create_map();
+  Object message = Object::create_map();
 
   map.insert_key(message_keys[UT_PEX], is_local_enabled(UT_PEX) ? 1 : 0);
 
   // Add "e" key if encryption is enabled, set it to 1 if we require
   // encryption for incoming connections, or 0 otherwise.
-  if (manager->connection_manager()->encryption_options() & ConnectionManager::encryption_allow_incoming != 0)
-    message.insert_key("e", manager->connection_manager()->encryption_options() & ConnectionManager::encryption_require != 0);
+  if ((manager->connection_manager()->encryption_options() & ConnectionManager::encryption_allow_incoming) != 0)
+    message.insert_key("e", (manager->connection_manager()->encryption_options() & ConnectionManager::encryption_require) != 0);
 
   message.insert_key("m", map);
   message.insert_key("p", manager->connection_manager()->listen_port());

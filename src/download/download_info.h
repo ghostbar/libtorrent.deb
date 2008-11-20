@@ -34,8 +34,8 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#ifndef LIBTORRENT_TRACKER_INFO_H
-#define LIBTORRENT_TRACKER_INFO_H
+#ifndef LIBTORRENT_DOWNLOAD_INFO_H
+#define LIBTORRENT_DOWNLOAD_INFO_H
 
 #include <list>
 #include <string>
@@ -78,9 +78,6 @@ public:
     m_isPrivate(false),
     m_pexEnabled(true),
     m_pexActive(true),
-
-    m_key(0),
-    m_numwant(-1),
 
     m_upRate(60),
     m_downRate(60),
@@ -125,20 +122,16 @@ public:
   bool                is_pex_active() const                        { return m_pexActive; }
   void                set_pex_active(bool active)                  { m_pexActive = active; }
 
-  uint32_t            key() const                                  { return m_key; }
-  void                set_key(uint32_t key)                        { m_key = key; }
-
-  int32_t             numwant() const                              { return m_numwant; }
-  void                set_numwant(int32_t n)                       { m_numwant = n; }
-
   Rate*               up_rate()                                    { return &m_upRate; }
   Rate*               down_rate()                                  { return &m_downRate; }
   Rate*               skip_rate()                                  { return &m_skipRate; }
 
   uint64_t            uploaded_baseline() const                    { return m_uploadedBaseline; }
+  uint64_t            uploaded_adjusted() const                    { return std::max<int64_t>(m_upRate.total() - uploaded_baseline(), 0); }
   void                set_uploaded_baseline(uint64_t b)            { m_uploadedBaseline = b; }
 
   uint64_t            completed_baseline() const                   { return m_completedBaseline; }
+  uint64_t            completed_adjusted() const                   { return std::max<int64_t>(m_slotStatCompleted() - completed_baseline(), 0); }
   void                set_completed_baseline(uint64_t b)           { m_completedBaseline = b; }
 
   uint32_t            size_pex() const                             { return m_sizePex; }
@@ -175,9 +168,6 @@ private:
   bool                m_pexEnabled;
   bool                m_pexActive;
 
-  uint32_t            m_key;
-  int32_t             m_numwant;
-
   Rate                m_upRate;
   Rate                m_downRate;
   Rate                m_skipRate;
@@ -199,6 +189,7 @@ private:
 struct SocketAddressCompact {
   SocketAddressCompact() {}
   SocketAddressCompact(uint32_t a, uint16_t p) : addr(a), port(p) {}
+  SocketAddressCompact(const rak::socket_address_inet* sa) : addr(sa->address_n()), port(sa->port_n()) {}
 
   operator rak::socket_address () const {
     rak::socket_address sa;

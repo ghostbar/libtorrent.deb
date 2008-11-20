@@ -45,6 +45,7 @@
 #include "torrent/connection_manager.h"
 #include "torrent/peer/peer_info.h"
 #include "torrent/peer/client_list.h"
+#include "torrent/peer/connection_list.h"
 
 #include "peer_connection_base.h"
 #include "handshake.h"
@@ -193,7 +194,7 @@ HandshakeManager::receive_succeeded(Handshake* handshake) {
 
       // We need to make libtorrent more selective in the clients it
       // connects to, and to move this somewhere else.
-      (!download->file_list()->is_done() || !handshake->bitfield()->is_all_set()) &&
+      (!download->file_list()->is_done() || !handshake->bitfield()->is_all_set() || download->initial_seeding() != NULL) &&
 
       (pcb = download->connection_list()->insert(handshake->peer_info(),
                                                  handshake->get_fd(),
@@ -207,13 +208,13 @@ HandshakeManager::receive_succeeded(Handshake* handshake) {
                                                                e_none,
                                                                &download->info()->hash());
 
+    pcb->peer_chunks()->set_have_timer(handshake->initialized_time());
+
     if (handshake->unread_size() != 0) {
       if (handshake->unread_size() > PeerConnectionBase::ProtocolRead::buffer_size)
         throw internal_error("HandshakeManager::receive_succeeded(...) Unread data won't fit PCB's read buffer.");
 
       pcb->push_unread(handshake->unread_data(), handshake->unread_size());
-      pcb->peer_chunks()->set_have_timer(handshake->initialized_time());
-
       pcb->event_read();
     }
 

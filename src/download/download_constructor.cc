@@ -42,6 +42,7 @@
 #include <rak/string_manip.h>
 
 #include "download/download_wrapper.h"
+#include "torrent/dht_manager.h"
 #include "torrent/exceptions.h"
 #include "torrent/object.h"
 #include "torrent/data/file.h"
@@ -49,6 +50,8 @@
 #include "tracker/tracker_manager.h"
 
 #include "download_constructor.h"
+
+#include "manager.h"
 
 namespace torrent {
 
@@ -103,7 +106,7 @@ DownloadConstructor::parse_name(const Object& b) {
   pathList.back().set_encoding(m_defaultEncoding);
   pathList.back().push_back(b.get_key_string("name"));
 
-  for (Object::map_type::const_iterator itr = b.as_map().begin();
+  for (Object::map_const_iterator itr = b.as_map().begin();
        (itr = std::find_if(itr, b.as_map().end(), download_constructor_is_single_path())) != b.as_map().end();
        ++itr) {
     pathList.push_back(Path());
@@ -167,8 +170,15 @@ DownloadConstructor::parse_tracker(const Object& b) {
   else if (b.has_key("announce"))
     add_tracker_single(b.get_key("announce"), 0);
 
-  else
+  else if (!manager->dht_manager()->is_valid() || m_download->info()->is_private())
     throw bencode_error("Could not find any trackers");
+
+  if (manager->dht_manager()->is_valid() && !m_download->info()->is_private())
+    tracker->insert(tracker->group_size(), "dht://");
+
+  if (manager->dht_manager()->is_valid() && b.has_key_list("nodes"))
+    std::for_each(b.get_key_list("nodes").begin(), b.get_key_list("nodes").end(),
+                  rak::make_mem_fun(this, &DownloadConstructor::add_dht_node));
 
   tracker->randomize();
 }
@@ -189,6 +199,24 @@ DownloadConstructor::add_tracker_single(const Object& b, int group) {
     throw bencode_error("Tracker entry not a string");
     
   m_download->main()->tracker_manager()->insert(group, rak::trim_classic(b.as_string()));
+}
+
+void
+DownloadConstructor::add_dht_node(const Object& b) {
+  if (!b.is_list() || b.as_list().size() < 2)
+    return;
+
+  Object::list_type::const_iterator el = b.as_list().begin();
+
+  if (!el->is_string())
+    return;
+
+  const std::string& host = el->as_string();
+
+  if (!(++el)->is_value())
+    return;
+
+  manager->dht_manager()->add_node(host, el->as_value());
 }
 
 bool
@@ -216,7 +244,7 @@ DownloadConstructor::parse_single_file(const Object& b, uint32_t chunkSize) {
   pathList.back().set_encoding(m_defaultEncoding);
   pathList.back().push_back(b.get_key_string("name"));
 
-  for (Object::map_type::const_iterator itr = b.as_map().begin();
+  for (Object::map_const_iterator itr = b.as_map().begin();
        (itr = std::find_if(itr, b.as_map().end(), download_constructor_is_single_path())) != b.as_map().end();
        ++itr) {
     pathList.push_back(Path());
@@ -227,7 +255,7 @@ DownloadConstructor::parse_single_file(const Object& b, uint32_t chunkSize) {
   if (pathList.empty())
     throw input_error("Bad torrent file, an entry has no valid filename.");
 
-  *fileList->front()->path() = choose_path(&pathList);
+  *fileList->front()->mutable_path() = choose_path(&pathList);
   fileList->update_paths(fileList->begin(), fileList->end());  
 }
 
@@ -243,14 +271,14 @@ DownloadConstructor::parse_multi_files(const Object& b, uint32_t chunkSize) {
   std::vector<FileList::split_type> splitList(objectList.size());
   std::vector<FileList::split_type>::iterator splitItr = splitList.begin();
 
-  for (Object::list_type::const_iterator listItr = objectList.begin(), listLast = objectList.end(); listItr != listLast; ++listItr, ++splitItr) {
+  for (Object::list_const_iterator listItr = objectList.begin(), listLast = objectList.end(); listItr != listLast; ++listItr, ++splitItr) {
     std::list<Path> pathList;
 
     if (listItr->has_key_list("path"))
       pathList.push_back(create_path(listItr->get_key_list("path"), m_defaultEncoding));
 
-    Object::map_type::const_iterator itr = listItr->as_map().begin();
-    Object::map_type::const_iterator last = listItr->as_map().end();
+    Object::map_const_iterator itr = listItr->as_map().begin();
+    Object::map_const_iterator last = listItr->as_map().end();
   
     while ((itr = std::find_if(itr, last, download_constructor_is_multi_path())) != last) {
       pathList.push_back(create_path(itr->second.as_list(), itr->first.substr(sizeof("path.") - 1)));

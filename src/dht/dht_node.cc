@@ -34,32 +34,61 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#ifndef LIBTORRENT_PROTOCOL_PEER_CONNECTION_SEED_H
-#define LIBTORRENT_PROTOCOL_PEER_CONNECTION_SEED_H
+#include "config.h"
+#include "globals.h"
 
-#include "peer_connection_base.h"
+#include "torrent/exceptions.h"
+#include "torrent/object.h"
+
+// For SACompact...
+#include "download/download_info.h"
+
+#include "dht_node.h"
 
 namespace torrent {
 
-class PeerConnectionSeed : public PeerConnectionBase {
-public:
-  PeerConnectionSeed() {}
-  ~PeerConnectionSeed();
+DhtNode::DhtNode(const HashString& id, const rak::socket_address* sa) :
+  HashString(id),
+  m_socketAddress(*sa),
+  m_lastSeen(0),
+  m_recentlyActive(false),
+  m_recentlyInactive(0),
+  m_bucket(NULL) {
 
-  virtual void        initialize_custom();
-  virtual void        update_interested();
-  virtual bool        receive_keepalive();
-
-  virtual void        event_read();
-  virtual void        event_write();
-
-private:
-  inline bool         read_message();
-  void                read_have_chunk(uint32_t index);
-
-  inline void         fill_write_buffer();
-};
-
+  if (sa->family() != rak::socket_address::af_inet)
+    throw resource_error("Address not af_inet");
 }
 
-#endif
+DhtNode::DhtNode(const std::string& id, const Object& cache) :
+  HashString(*HashString::cast_from(id.c_str())),
+  m_recentlyActive(false),
+  m_recentlyInactive(0),
+  m_bucket(NULL) {
+
+  rak::socket_address_inet* sa = m_socketAddress.sa_inet();
+  sa->set_family();
+  sa->set_address_h(cache.get_key_value("i"));
+  sa->set_port(cache.get_key_value("p"));
+  m_lastSeen = cache.get_key_value("t");
+  update();
+}
+
+char*
+DhtNode::store_compact(char* buffer) const {
+  HashString::cast_from(buffer)->assign(data());
+
+  SocketAddressCompact sa(address()->sa_inet());
+  std::memcpy(buffer + 20, sa.c_str(), 6);
+
+  return buffer + 26;
+}
+
+Object*
+DhtNode::store_cache(Object* container) const {
+  container->insert_key("i", m_socketAddress.sa_inet()->address_h());
+  container->insert_key("p", m_socketAddress.sa_inet()->port());
+  container->insert_key("t", m_lastSeen);
+  return container;
+}
+
+}

@@ -12,6 +12,8 @@ libsub_torrent_la_SOURCES = \
 	common.h \
 	connection_manager.cc \
 	connection_manager.h \
+	dht_manager.cc \
+	dht_manager.h \
 	download.cc \
 	download.h \
 	error.cc \
@@ -39,6 +41,8 @@ libsub_torrent_la_SOURCES = \
 	rate.h \
 	resume.cc \
 	resume.h \
+	throttle.cc \
+	throttle.h \
 	torrent.cc \
 	torrent.h \
 	tracker.cc \
@@ -54,6 +58,7 @@ libtorrentinclude_HEADERS = \
 	chunk_manager.h \
 	common.h \
 	connection_manager.h \
+	dht_manager.h \
 	download.h \
 	error.h \
 	exceptions.h \
@@ -69,6 +74,7 @@ libtorrentinclude_HEADERS = \
 	poll_select.h \
 	rate.h \
 	resume.h \
+	throttle.h \
 	torrent.h \
 	tracker.h \
 	tracker_list.h

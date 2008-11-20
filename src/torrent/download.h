@@ -48,7 +48,7 @@
 
 namespace torrent {
 
-typedef std::list<Peer> PList;
+class ConnectionList;
 
 // Download is safe to copy and destory as it is just a pointer to an
 // internal class.
@@ -57,11 +57,19 @@ class LIBTORRENT_EXPORT Download {
 public:
   static const uint32_t numwanted_diabled = ~uint32_t();
 
+  // Start and open flags can be stored in the same integer, same for
+  // stop and close flags.
+  static const int start_no_create     = (1 << 0);
+  static const int start_keep_baseline = (1 << 1);
+  static const int start_skip_tracker  = (1 << 2);
+
+  static const int stop_skip_tracker   = (1 << 0);
+
   Download(DownloadWrapper* d = NULL) : m_ptr(d) {}
 
   // Not active atm. Opens and prepares/closes the files.
-  void                open();
-  void                close();
+  void                open(int flags = 0);
+  void                close(int flags = 0);
 
   // When 'tryQuick' is true, it will only check if the chunks can be
   // mmaped and stops if one is encountered. If it doesn't find any
@@ -73,18 +81,8 @@ public:
   void                hash_stop();
 
   // Start/stop the download. The torrent must be open.
-  void                start();
-  void                stop();
-
-  //   static const int start_no_create = (1 << 0);
-  static const int start_keep_baseline = (1 << 1);
-  static const int start_skip_tracker  = (1 << 2);
-
-  static const int stop_skip_tracker   = (1 << 0);
-
-  // These will be renamed when the API is updated.
-  void                start2(int flags);
-  void                stop2(int flags);
+  void                start(int flags = 0);
+  void                stop(int flags = 0);
 
   // Does not check if the download has been removed.
   bool                is_valid() const { return m_ptr; }
@@ -113,12 +111,15 @@ public:
   Object*             bencode();
   const Object*       bencode() const;
 
-  TrackerList         tracker_list() const;
+  TrackerList*        tracker_list() const;
 
   FileList*           file_list() const;
   PeerList*           peer_list();
   const PeerList*     peer_list() const;
   const TransferList* transfer_list() const;
+
+  ConnectionList*       connection_list();
+  const ConnectionList* connection_list() const;
 
   // Remove the old non-const versions.
   Rate*               down_rate();
@@ -150,16 +151,16 @@ public:
   // These must be called when is_open, !is_checked and !is_checking.
   void                set_bitfield(bool allSet);
   void                set_bitfield(uint8_t* first, uint8_t* last);
-  void                clear_range(uint32_t first, uint32_t last);
+
+  static const int update_range_recheck = (1 << 0);
+  static const int update_range_clear   = (1 << 1);
+
+  void                update_range(int flags, uint32_t first, uint32_t last);
 
   // Temporary hack for syncing chunks to disk before hash resume is
   // saved.
   void                sync_chunks();
 
-  uint32_t            peers_min() const;
-  uint32_t            peers_max() const;
-  uint32_t            peers_connected() const;
-  uint32_t            peers_not_connected() const;
   uint32_t            peers_complete() const;
   uint32_t            peers_accounted() const;
 
@@ -172,14 +173,15 @@ public:
   bool                accepting_new_peers() const;
   uint32_t            uploads_max() const;
   
-  void                set_peers_min(uint32_t v);
-  void                set_peers_max(uint32_t v);
-
   void                set_uploads_max(uint32_t v);
+
+  void                set_upload_throttle(Throttle* t);
+  void                set_download_throttle(Throttle* t);
 
   typedef enum {
     CONNECTION_LEECH,
-    CONNECTION_SEED
+    CONNECTION_SEED,
+    CONNECTION_INITIAL_SEED,
   } ConnectionType;
 
   ConnectionType      connection_type() const;
@@ -190,18 +192,9 @@ public:
   // all the peer bitfields to see if we are still interested.
   void                update_priorities();
 
-  // If you create a peer list, you *must* keep it up to date with the signals
-  // peer_{connected,disconnected}. Otherwise you may experience undefined
-  // behaviour when using invalid peers in the list.
-  void                peer_list(PList& pList);
-  Peer                peer_find(const std::string& id);
-
-  void                disconnect_peer(Peer p);
-
   typedef sigc::slot0<void>                                          slot_void_type;
   typedef sigc::slot1<void, const std::string&>                      slot_string_type;
 
-  typedef sigc::slot1<void, Peer>                                    slot_peer_type;
   typedef sigc::slot1<void, uint32_t>                                slot_chunk_type;
   typedef sigc::slot3<void, const std::string&, const char*, size_t> slot_dump_type;
 
@@ -210,9 +203,6 @@ public:
   // when the torrent is active, so hash checking will not trigger it.
   sigc::connection    signal_download_done(slot_void_type s);
   sigc::connection    signal_hash_done(slot_void_type s);
-
-  sigc::connection    signal_peer_connected(slot_peer_type s);
-  sigc::connection    signal_peer_disconnected(slot_peer_type s);
 
   sigc::connection    signal_tracker_succeded(slot_void_type s);
   sigc::connection    signal_tracker_failed(slot_string_type s);
