@@ -42,7 +42,6 @@
 #include <sigc++/signal.h>
 
 #include "data/chunk_handle.h"
-#include "torrent/peer/peer.h"
 #include "download/download_info.h"
 
 #include "download_main.h"
@@ -58,13 +57,13 @@ class HashTorrent;
 class HandshakeManager;
 class DownloadInfo;
 class Object;
+class Peer;
 
 class DownloadWrapper {
 public:
   typedef sigc::signal0<void>                     Signal;
   typedef sigc::signal1<void, uint32_t>           SignalChunk;
   typedef sigc::signal1<void, const std::string&> SignalString;
-  typedef sigc::signal1<void, Peer>               SignalPeer;
 
   DownloadWrapper();
   ~DownloadWrapper();
@@ -72,7 +71,6 @@ public:
   // Initialize hash checker and various download stuff.
   void                initialize(const std::string& hash, const std::string& id);
 
-  void                open();
   void                close();
 
 //   bool                is_open() const                         { return m_main.is_open(); }
@@ -106,9 +104,6 @@ public:
   void                receive_tracker_success(AddressList* l);
   void                receive_tracker_failed(const std::string& msg);
 
-  void                receive_peer_connected(PeerConnectionBase* peer);
-  void                receive_peer_disconnected(PeerConnectionBase* peer);
-
   void                receive_tick(uint32_t ticks);
 
   void                receive_update_priorities();
@@ -122,9 +117,6 @@ public:
 
   SignalChunk&        signal_chunk_passed()          { return m_signalChunkPassed; }
   SignalChunk&        signal_chunk_failed()          { return m_signalChunkFailed; }
-
-  SignalPeer&         signal_peer_connected()        { return m_signalPeerConnected; }
-  SignalPeer&         signal_peer_disconnected()     { return m_signalPeerDisconnected; }
 
 private:
   DownloadWrapper(const DownloadWrapper&);
@@ -154,9 +146,6 @@ private:
 
   sigc::connection    m_connectionChunkPassed;
   sigc::connection    m_connectionChunkFailed;
-
-  SignalPeer          m_signalPeerConnected;
-  SignalPeer          m_signalPeerDisconnected;
 };
 
 }

@@ -191,6 +191,11 @@ PeerList::insert_available(const void* al) {
   return inserted;
 }
 
+uint32_t
+PeerList::available_list_size() const {
+  return m_availableList->size();
+}
+
 PeerInfo*
 PeerList::connected(const sockaddr* sa, int flags) {
   if (!socket_address_key::is_comparable(sa))
@@ -253,11 +258,12 @@ PeerList::disconnected(PeerInfo* p, int flags) {
   
   iterator itr = std::find_if(range.first, range.second, rak::equal(p, rak::mem_ref(&value_type::second)));
 
-  if (itr == range.second)
+  if (itr == range.second) {
     if (std::find_if(base_type::begin(), base_type::end(), rak::equal(p, rak::mem_ref(&value_type::second))) == base_type::end())
       throw internal_error("PeerList::disconnected(...) itr == range.second, doesn't exist.");
     else
       throw internal_error("PeerList::disconnected(...) itr == range.second, not in the range.");
+  }
   
   disconnected(itr, flags);
 }
@@ -301,7 +307,8 @@ PeerList::cull_peers(int flags) {
         itr->second->transfer_counter() != 0 ||
         itr->second->last_connection() >= timer ||
 
-        (flags & cull_keep_interesting && itr->second->failed_counter() != 0)) {
+        (flags & cull_keep_interesting && 
+         (itr->second->failed_counter() != 0 || itr->second->is_blocked()))) {
       itr++;
       continue;
     }

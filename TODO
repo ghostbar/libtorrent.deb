@@ -1,423 +1,348 @@
-* SWEEET
-* Cherry
-* Mirai Nikki
+--- TODAY ---
 
+* Kanjis
 
+* Legge ut på senga ting du skal ha med deg til japan.
 
-- Allow construction of cached command call lookups.
+* Backup av ting.
 
 
-- Consolidate the bools in DownloadInfo.
+== I morgen ==
 
+Få sendt mail til UIO angående de papirene fra JIU.
 
-- Remove connection_list set_difference?
 
+== backup ==
 
-- Add a flag to the available address insert that checks if a PeerInfo
-  has the 'seeder' flag set. Also, add the flag.
+backup bilder
 
+backup diverse
 
-- When collapsed, show the priority of the aggragate of the files
-  contained.
 
-- Switch commands to is_pex_active/enabled.
 
-- Convert sorting of views should only use cached commands.
+- omiage list -
 
+ichiyama-sensei - makrell i tomat? Norsk manga
 
-- Make the ElementText list take a single c_str, which will contain a
-  list of commands/strings. Some kind of formatting will be provided.
+noen spurte etter norsk sjokolade, skaff flere melkesjokolader
 
+momo-chan - hva som helst
 
+yuki - hmm...? hun er interesert i sansou
 
-- Fix BSD problems with statfs, etc.
+til YUUNA og MARIE ++, ikke glemme dette!!! Kan du finne en gammel mumie-troll book?
 
-- XMLRPC load_raw should return the hash. Or rather, return a list of hashes?
 
-PeerConnectionBase::send_pex_message() - Need to ensure that we're
-'accepting' pex. Also, consider how we can accept handshakes from the
-other side.
+- kaimono list -
 
+Masse tyrkisk pepper, og lakris generelt
 
-- ProtocolExtension::generate_handshake_message cache the messages? At least get rid of the unneccesary buffer copy.
+Spoer mamma om det derre snorke-greiene.
 
+- todo -
 
-- Adjust AvailableList::want_more?
+rydd opp i harddisken og scramble unused space
 
 
-- Look into adding a connected peers list.
 
-- Add a sorted list class that can easily be used by the client? Or should this be handled by rtorrent?
 
 
-- Path expand for dot-prefixed dirs.
+* Add a timer so that we pace our http requests instead of flooding
+  all our available slots at the same time.
 
-- Add close_direct to xmlrpc and make a note in the wiki.
 
 
-- Fix start_tied, so it doesn't re-download moved torrents.
+--- Change ---
 
+# Only check the filename cache for loading tied torrents (e.g. from watch dirs) but not
+# manually loaded ones via <enter>/<bs>, to allow loading those again (ticket #1227).
 
 
+POST: race shuttle taking control of global markets
 
-! Notes about dns resolution happening at time of call for ip, bind, etc.
-http://archives.seul.org/or/cvs/Apr-2007/msg00069.html
+* Start reviewing patches.
 
-- See if we can include SVN rev in the two bytes after peer id.
 
-- Should it be possible to move files and change FileList while a torrent is running?
+_bear397!
 
 
-!!! The 'undead' torrents, are they perhaps caused by watching a
-    directory for start_tied or similar?
+d.multicall main p.multicall=,p.get_address=
 
-- Cache the info hash.
 
+<josef> rakshasa: I've now noticed the same problem from ticket #1302. Downloading a torrent with a fast server as peer and various other slower peers. The fast peer was idle most of the time, only every few seconds did rtorrent request pieces and received them instantly.
 
-- Work on proper handling of missing files.
 
-- Add a flag for pre-allocating files.
+- Update a timestamp for upload/download activity. This would be used
+  in the download scheduler.
 
 
-- Launch ncurses free rtorrent.
+- A bug caused by trying to download a torreng, not getting any peers
+  so it only makes the zero-length files, then restarting the
+  client. Should require ^E to continue.
 
-- d.get_base_filename - closed returns empty string.
 
-- Implement a new logging system, where also commands can be used to
-  write to 'named' fds.
+- Add a rudementary max downloads thing, make it separate seeding and
+  leeching.
 
 
-- Add early check for valid bencode in tracker get and file load.
+- Insert active torrents in to active.
 
+- Move DL event inserts into the new commands thing?
 
-- Call on_finished when hashing torrent? Add a seperate event for this?
 
+FileList::set_root_dir(const std::string& path) ?????
 
-- http://libtorrent.rakshasa.no/ticket/984#comment:9
 
-- http://libtorrent.rakshasa.no/ticket/952 Check if it happens due to
-  final hash checking being turned off.
+ChunkList::get(size_type index, bool writable) <- Figure out how to
+make it work with hash checking when you can't open the files... The
+error code hack probably isn't right.
 
+// Missing file, skip the hash check. <- this should skip all chunks
+touched by that file.
 
-- Look into how libstdc++ optimizes code size by using generic base
-  container things. See if this works for rak::function stuff.
 
-- Change TE to use only commands.
+- add Command::call_void?
 
-- Convert Menu element to use commands.
+- Make the command_map_data_type typedef's use a common template parameter.
 
-Man page:
 
-- load_* appended commands.
+=== Design notes for multi-layered torrent state control ===
 
+The queue shares some common characteristics with the hash-queue. Yet
+we probably can't put them togheter as hashing and being in the queue
+are separate states.
 
-- Add builtin multi-get commands.
+We also need to support multiple queues. This means we can implement
+'forced' and 'disabled' as two queues. Stopping/starting a torrent
+would now then involve adding it to the appropriate queue, which would
+put in motion the DL related actions.
 
-
-- Write a document of some kind on how to write smaller maps with
-  const char*. Search the net too.
-
-
-- Only create files that are the size of their border when set to
-  off. Also, consider not truncating before we get incoming data to a
-  file.
-
-
-- Prune bad peers from full lists.
-
-
-- Check the tracker id thing.
-
-- un-inline some of the rpc calls.
-
-
-optimize hexchar_to_value.
-
-
-=== States ===
-
-- State, the torrent is started/stopped or in the process of doing so.
-
-- Hashing, queued for hashing.
-
-The above should be enough to handle the internal control.
-
-- UserState, e.g:
-
-* off
-* scheduled, being controlled by a download scheduler. Includes a priority.
-* forced on
-* forced off
+But how would this relate to the download commands? Well, to allow the
+queues to be as scriptable as possible, we'd need to keep the DL
+related commands as-is. We'd also add a download command for moving it
+to a new queue, and make a couple of helper functions.
 
 ===
 
-
-=== API CHANGES ===
-
-- Add even more efficent bencode data -> char buffer functions.
-
-- Make sure a flag for not allocating files is included.
-
-- Change error.h to reflect the style in c++0x.
-
-- Use custom ctor functions for torrent::Object types, and make the
-  std::string one uninlined.
-
-- Add a torrent::Object flag in rtorrent that sets if a list is a
-  function call or just a normal list. Then change the parse_command
-  stuff to recurse into the latter, but not the former.
-
-  Just add support for "()" for list parsing, and set the flag when
-  these are used. Then migrate to this scheme, from the string commands.
-
-- Equal, if/else, match substrings.
-
-- Fix the socket limit thing.
-
-- Allow multiple requests to be disabled.
-
-- Enable various 'resonable' defaults. Enc, diskspace, etc.
-
-- Rename const File::path. (Or rather, the mutable one)
-
-- Fix the Tracker* API.
-
-- Move global throttle and div code into libtorrent.
-
-- torrent::set_max_unchoked > torrent::set_max_upload_unchoked
-
-- http://libtorrent.rakshasa.no/ticket/983
-
-- http://libtorrent.rakshasa.no/ticket/72
-
-- Allow info-hash to be set on torrent load.
-
-- Move various stuff into torrent/net/.
-
-- Fix max open sockets API+options. Possibly allow changing the ulimit.
-
-- At least add default list ctor to torrent::Object.
-
-- Fix the peer list.
-
-- Download::info_hash() should return ptr.
-
-- Torrent::Object "insert if not present" function?
-
-- Add support for global settings, with e.g. a dirty bit to decide
-  what should be changed along with global settings.
-
-- Rename e_handshake_ to eh_
+- Make active and similar views internal, and keep just a copy for
+  external consumption.
 
 ===
 
+- Look at the current View thing and whether you need to add support
+  for commands on insert/erase/stuff, and possibly improve the current
+  code so updates can be done efficiently. Kinda like subscribing to
+  events, thus insert and removal from current queues will be much
+  more efficient.
 
-Check the race condition for loading from watch dir.
+{
 
-- Perhaps we're not properly comparing against previously tied paths?
-  Might be we try loading the torrents every tick?
+- Add a command the cleans up strings for proper sorting.
 
-- A timeout for the current tied_to_file paths?
 
+? Then make it so that the Views are populated based completely on
+  events, rather than filtering every single type of event.
 
+- Make filter_on call repeatedly with a single string, rather than
+  accepting a list.
 
-- Clearing tied manually doesn't remove the links.
 
+- Do we need to build up command 'chains' now?
 
 
-Convert option parser to rak fn.
+- Consider the need to make the views guaranteed large enough for
+  inserts, so that if we iterate through a View doing actions on stuff
+  it will remain safe?
 
-! Feature: Allow rtorrent to be temporary paused by touching an
-  external file.
+- Do we want to keep the current design of a vector holding all
+  downloads? This does make it better at handling
+  insert/remove/filter, but worse at dealing with large sets.
 
-! When creating dirs/files lazily, only create the first
-  file/dir. That should cover most potential errors.
+}
 
 
-- Implement a character tree.
+! Once the Views are up to snuff, create the started and stopped
+  queues and migrate the current code.
 
+{
 
-Handshake, check if INACTIVE before writing in event_read.
+* Change start/stop functions into moving in/out of the Views. Events
+  to those views.
 
+- Make the start/stop functions into commands.
 
-Consider the possibility of threading during file close if the files
-are larger than a few 100 mb and not done. But first check where OSX
-is blocking.
+- Make command slot that wraps commands.
 
-Allow monitoring with stuff like inotify for new files. Make it an
-event similar to schedule, but ensure it is slightly delayed that
-checks the state of the file to ensure it is finished when we check
-it.
+- DownloadList::close_quick(Download* download) <- next up.
 
-Set the proper flags on all fd's used internally in
-libtorrent. Possibly make it an option.
 
+! Remove the extra CommandSlot<void> thing, an internal template
+  struct or just make void functions hide the parameter?
 
-- AvailableList::buffer(), is it being used? Figure out what you want to use it for.
 
+}
 
 
 
-<josef> rakshasa: I think when a peer sends a choke, the queued pieces aren't removed from the transfer list, the chunks there still have them marked for the peer
-<josef> it fixes itself eventually when they get overwritten with another peer, but it might be a little less efficient that way
+- Add the queue View and make it work on magic faire dust and old socks.
 
+- Make upload/download slots work on the heuristics of the scheudlers.
 
-- Add the min time between unchokes.
 
-- Check if we do enough checking during receive of unchoke, so as not
-  to cause us to use slots when we're not really interested.
+- Commit dht-align patch with comment on alignment req.
 
-- Improve the choking weighing for downloads.
 
+- Add XMLRPC version information?
 
-=== The Variable rewrite stuff ===
 
-- Add move on rvalue copy.
+- Add proper (and non-blocking) fallocate support. This also needs to
+  check how much space is left. The interface needs to allow us to say
+  if we want to do blocking or non-blocking allocate, etc.
 
-- Rewrite to use placement new/delete, and support swap.
+  Allocate should probably be called when we first try to write
+  something to a file.
 
 
-- torrent::Object will use the upper 24 bits for flags. 8 of those will
-  be internal to libtorrent and/or Object.
 
-- Try to figure out some clever arrangement of the flags so that when
-  we check for const vs. non-const is_type thing, it will use
-  different masks. Dunno if getting the 8bit border for both is worth
-  it.
+- Add a 'tweaking upload/download slots' guide.
 
-- We then probably need to rename the non-const accesses to mutable_*
-  to avoid bork when we just need a const access.
 
+- Trim ending / in filenames? Look closer at this... It seems we're
+  not validating the path elements properly. E.g path and name in
+  different encodings. Should we move this closer to the place it is
+  used, like when we freeze the paths? That would make sure we catch
+  weird loopholes, though might want to check the torrent data on load
+  to make sure we don't let scripts read bad paths.
 
 
+- Fix the 'mtime' not being updated when just moving a file into a dir thing.
 
-- Make the self-contained variable storing Variables able to expose
-  the variables in some other way, so that we can have two different
-  variables doing read and write.
+- Move SACompact somewhere sane.
 
-- Split variables into set and get variables. Start by changing all
-  users to the respective different variables using the old get/set.
 
-- Add a bencode pool that gets passed with calles to VariableMap.
 
+=== Move DL slots to pure commands ===
 
+ui/download_list.cc: Change the erase slot to a command which is
+internal, and this command needs to be possible to enable/disable by
+setting/unsetting a DL target. (Unless we access DL through
+control->ui() instead?)
 
-=== API CHANGES ===
+---
 
-Remove std::string from exceptions.
+=== Improve command efficiency on multiple calls with different targets ===
 
+- Create a way to convert a string to a set of command objects and
+  arguments, which is not tied to any target. This would not expand
+  any $ in arguments.
 
-- what do you think about the DhtStatistics class?
+---
 
-+    torrent::dht_manager()->set_can_receive(false); 
-Hmm...
+=== Pass the target_type thing to all the CommandSlot<...> functions ===
 
-tracker_base
-+  const std::string&  status() const                        { return m_status; }
-Don't use a string.
+- Remove CommandSlot<void> specialisation and use an in-class template
+struct to define the right type. That struct will also wrap the call
+to the slot, thus allowing reuse of the same code.
 
+- Figure out how to move over to using only target_type's from
+CommandMap.
 
+---
 
-*** IDEA ***
 
-Create tools for avoiding std::string use in favor of cstr. Like
-autobuild cstr for arguments from std::string and const cstr's and
-other known length stuff.
+- Make the paypal link more prominent.
 
+design of everyday things
 
 
-- Set a bad timeout for select... add some kind of sanity check.
+#1243 - Check if write failure doesn't get properly detected.
 
-- the goto restart might cause write-done to be set after read_peer.
 
-- Remove the interested/choked/etc from PCB and allow const access to PB.
+- Write a note about {} now being sensetive to whitespace, etc.
 
-Bad peer: very slow upload, when choked, sends HAVE messages at high rate.
+- To make the { syntax proper, it needs to read the contents directly to a list of lists of commands+args.
 
 
-- Do something about the max_memory_usage docs. Make it explicit that
-  the user should tweak their ulimit instead of rtorrent's settings?
+<josef> rtorrent: priority_queue_insert(...) received a bad timer.
+<josef> reproducible when I force a hash check on a torrent with nothing downloaded
 
-- Rename max_memory_usage to max_...?
 
-- Add a check that tries to set/unset the soft ulimit if unlimited,
-  just to check that the user doesn't fsck us?
+<josef> but now I got TrackerList::receive_failed(...) called but the iterator is invalid."
 
-  Consider also using this to detect max vmem.
+<josef> rakshasa: it'd be nice to have something like import_nothrow that logs errors and continues instead of aborting like try_import
 
 
-- Add priority to connections, about what kind of rarity pieces, and
-  what download they are on.
+http://libtorrent.rakshasa.no/ticket/1213
 
-- Need to fix the pipe-lining code too.
 
-- Might want to require download throttle to be set, though I assume
-  it should be possible without it. Anyway, one of the first things I
-  need to implement, is a way to detect if we're close to full
-  bandwidth usage. This needs to take into account that upload and
-  congestion varies.
 
-- Obviously we need to put the 30 second cycles into use.
+- Change key presses in element_download_list.cc to commands.
 
-- Might use an vector of the last N ticks and how our performance was.
+- Fix view_set. This involves adding a map of views, check also iterator sanity.
 
-- Prefer peers which send rare pieces.
 
+- Consider if the mtime resolution is enough to avoid race conditions
+  on the prune cache.
 
-- Add variable(s) for creating new variables.
 
-- preloading should perhaps check the piped requests.
 
-- Move permission, etc, from File to the new OpenFile's value_type?
+ElementDownloadList::ElementDownloadList() - FIXME
 
+- Add the 'set queue_create/resize' flags.
 
-- Consider if this would benefit from allowing custom open-file
-  functions to be defined per File. Not necessarily right now, but in
-  the future. Anyway, add a way to make it configurable if we want to
-  create the file or throw.
 
+- directory_entry::is_file() const { return true; }
 
 
-- Move file/dir creation into open_file or similar.
 
-- Later re-add a function for creating all directories in a torrent at
-  open.
+- Make Pool lazily created.
 
 
+- Fix the api for allocating sockets. Make this a helper function or something?
 
-- Allow flags when starting/opening that do extra error checking or
-  ignore them.
+- The global up/down slot limit only gets set after throttle is updated...
 
-- When it does the missing files thing, it actually creates the missing file... bad.
+- Global up/down for high speeds is insane... Also, move these into
+  libtorrent helper functions.
 
+- The download slot limit doesn't work properly when we try to limit
+  the amount of memory being limited, as it will accept downloading.
 
+- Extend Object to support floats?
 
-- Add helper functions for setting the various max open stuff.
+- Look into the problem of transfers during (inital) hash check. Could
+  we perhaps allow pausing things while checking?
 
-- Check diskspace before opening a new/incomplete torrent. Should we
-  add the start with flags thing now as a renamed function, then add a
-  flag that checks for diskspace/existing files.
+- Add option to save resume data on session auto save.
 
-- Add DownloadList thing to the API. Make the old torrent api use this
-  API. This should contain DownloadWrappers for now.
 
-- See if we can embed data in the curl handle, like the curlget pointer.
+- Unallocate blocks that are in peers that haven't transfered data in
+  a couple ticks.
 
-- Fix HttpQueue?
 
-- Check how many peers we received, and only reconnect if we got less
-  than request size. Won't work.
 
-- Fix erasing in HashQueue.
 
-- Allow print_attr to skip lines.
 
-- Move signals to their respective classes in the interface.
+--- API redesign ---
 
-- Allow setting the source port. Also move stuff like bind address.
+- Refactor the Download class. This should probably merge Download and
+  DownloadWrapper.
 
-- New global torrent class.
+- Create a download list class.
 
-- Fix the resume interface.
+- Remove Download::set_connection_type.
 
-- Tracker dump does not show failed tracker connects.
+- Move stuff into a global torrent object.
+
+- Change Peer to PeerConnection.
+
+
+---
+
+<josef> or the bug with pieces getting stuck in the transfer list after we receive a choke
+<josef> I had no patch for that, you just need to call download_queue()->cancel() twice in PCL::read_message
+
+Seems the RequestList::cancel thing is kinda bad, as it does both 'cancel queued' and 'clear canceled'.
+
+
+- Add support for diffs to torrents and saved infohash, so we improve shutdown time.

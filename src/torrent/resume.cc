@@ -92,22 +92,63 @@ resume_load_progress(Download download, const Object& object) {
     return;
   }
 
-  Object::list_type::const_iterator filesItr  = files.begin();
-  Object::list_type::const_iterator filesLast = files.end();
+  Object::list_const_iterator filesItr  = files.begin();
+  Object::list_const_iterator filesLast = files.end();
 
   FileList* fileList = download.file_list();
 
   for (FileList::iterator listItr = fileList->begin(), listLast = fileList->end(); listItr != listLast; ++listItr, ++filesItr) {
     rak::file_stat fs;
 
-    // Check that the size and modified stamp matches. If not, then
-    // clear the resume data for that range.
+    if (!filesItr->has_key_value("mtime")) {
+      // If 'mtime' is erased, it means we should start hashing and
+      // downloading the file as if it was a new torrent.
+      (*listItr)->set_flags(File::flag_create_queued | File::flag_resize_queued);
 
-    if (!fs.update(fileList->root_dir() + (*listItr)->path()->as_string()) ||
-        (uint64_t)fs.size() != (*listItr)->size_bytes() ||
-        !filesItr->has_key_value("mtime") ||
-        filesItr->get_key_value("mtime") != fs.modified_time())
-      download.clear_range((*listItr)->range().first, (*listItr)->range().second);
+      download.update_range(Download::update_range_recheck | Download::update_range_clear,
+                            (*listItr)->range().first, (*listItr)->range().second);
+      continue;
+    }
+
+    int64_t mtimeValue = filesItr->get_key_value("mtime");
+    bool    fileExists = fs.update(fileList->root_dir() + (*listItr)->path()->as_string());
+
+    // The default action when we have 'mtime' is not to create nor
+    // resize the file.
+    (*listItr)->unset_flags(File::flag_create_queued | File::flag_resize_queued);
+
+    if (mtimeValue == ~int64_t(0) || mtimeValue == ~int64_t(1)) {
+      // If 'mtime' is ~0 it means we haven't gotten around to
+      // creating the file.
+      //
+      // Else if it is ~1 it means the file doesn't exist nor do we
+      // want to create it.
+      //
+      // When 'mtime' is ~2 we need to recheck the hash without
+      // creating the file. It will just fail on the mtime check
+      // later, so we don't need to handle it explicitly.
+
+      if (mtimeValue == ~int64_t(0))
+        (*listItr)->set_flags(File::flag_create_queued | File::flag_resize_queued);
+
+      // Ensure the bitfield range is cleared so that stray resume
+      // data doesn't get counted.
+      download.update_range(Download::update_range_clear | (fileExists ? Download::update_range_recheck : 0),
+                            (*listItr)->range().first, (*listItr)->range().second);
+      continue;
+    }
+
+    if ((uint64_t)fs.size() != (*listItr)->size_bytes() || mtimeValue != fs.modified_time()) {
+      // If we're the wrong size or mtime, set flag_resize_queued if
+      // necessary and do a hash check for the range.
+
+      if ((uint64_t)fs.size() != (*listItr)->size_bytes())
+        (*listItr)->set_flags(File::flag_resize_queued);
+
+      download.update_range(Download::update_range_clear | Download::update_range_recheck,
+                            (*listItr)->range().first, (*listItr)->range().second);
+      continue;
+    }
   }
 }
 
@@ -131,31 +172,42 @@ resume_save_progress(Download download, Object& object, bool onlyCompleted) {
   else
     object.insert_key("bitfield", std::string((char*)bitfield->begin(), bitfield->size_bytes()));
   
-  Object::list_type& files = object.has_key_list("files")
-    ? object.get_key_list("files")
-    : object.insert_key("files", Object(Object::TYPE_LIST)).as_list();
-
-  Object::list_type::iterator filesItr = files.begin();
+  Object::list_type&    files    = object.insert_preserve_copy("files", Object::create_list()).first->second.as_list();
+  Object::list_iterator filesItr = files.begin();
 
   FileList* fileList = download.file_list();
 
   for (FileList::iterator listItr = fileList->begin(), listLast = fileList->end(); listItr != listLast; ++listItr, ++filesItr) {
     if (filesItr == files.end())
-      filesItr = files.insert(filesItr, Object(Object::TYPE_MAP));
+      filesItr = files.insert(filesItr, Object::create_map());
     else if (!filesItr->is_map())
-      *filesItr = Object(Object::TYPE_MAP);
+      *filesItr = Object::create_map();
 
     filesItr->insert_key("completed", (int64_t)(*listItr)->completed_chunks());
 
     rak::file_stat fs;
+    bool fileExists = fs.update(fileList->root_dir() + (*listItr)->path()->as_string());
 
-    if (!fs.update(fileList->root_dir() + (*listItr)->path()->as_string()) ||
-        (onlyCompleted && (*listItr)->completed_chunks() != (*listItr)->size_chunks())) {
-      filesItr->erase_key("mtime");
-      continue;
+    if (!fileExists) {
+      
+      if ((*listItr)->is_create_queued())
+        // ~0 means the file still needs to be created.
+        filesItr->insert_key("mtime", ~int64_t(0));
+      else
+        // ~1 means the file shouldn't be created.
+        filesItr->insert_key("mtime", ~int64_t(1));
+
+    } else if (onlyCompleted && (*listItr)->completed_chunks() != (*listItr)->size_chunks()) {
+
+      // ~2 means the file needs to be rehashed, but not created.
+      //
+      // This needs to be fixed so it handles cases where the file
+      // exists but wasn't the right size.
+      filesItr->insert_key("mtime", ~int64_t(2));
+
+    } else {
+      filesItr->insert_key("mtime", (int64_t)fs.modified_time());
     }
-
-    filesItr->insert_key("mtime", (int64_t)fs.modified_time());
   }
 }
 
@@ -171,8 +223,8 @@ resume_load_file_priorities(Download download, const Object& object) {
 
   const Object::list_type& files = object.get_key_list("files");
 
-  Object::list_type::const_iterator filesItr  = files.begin();
-  Object::list_type::const_iterator filesLast = files.end();
+  Object::list_const_iterator filesItr  = files.begin();
+  Object::list_const_iterator filesLast = files.end();
 
   FileList* fileList = download.file_list();
 
@@ -186,25 +238,22 @@ resume_load_file_priorities(Download download, const Object& object) {
       (*listItr)->set_priority((priority_t)filesItr->get_key_value("priority"));
 
     if (filesItr->has_key_value("completed"))
-      fileList->set_file_completed_chunks(listItr, std::max<int64_t>(filesItr->get_key_value("completed"), (*listItr)->size_chunks()));
+      (*listItr)->set_completed_chunks(filesItr->get_key_value("completed"));
   }
 }
 
 void
 resume_save_file_priorities(Download download, Object& object) {
-  Object::list_type& files = object.has_key_list("files")
-    ? object.get_key_list("files")
-    : object.insert_key("files", Object(Object::TYPE_LIST)).as_list();
-
-  Object::list_type::iterator filesItr = files.begin();
+  Object::list_type&    files    = object.insert_preserve_copy("files", Object::create_list()).first->second.as_list();
+  Object::list_iterator filesItr = files.begin();
 
   FileList* fileList = download.file_list();
 
   for (FileList::iterator listItr = fileList->begin(), listLast = fileList->end(); listItr != listLast; ++listItr, ++filesItr) {
     if (filesItr == files.end())
-      filesItr = files.insert(filesItr, Object(Object::TYPE_MAP));
+      filesItr = files.insert(filesItr, Object::create_map());
     else if (!filesItr->is_map())
-      *filesItr = Object(Object::TYPE_MAP);
+      *filesItr = Object::create_map();
 
     filesItr->insert_key("priority", (int64_t)(*listItr)->priority());
   }
@@ -219,7 +268,7 @@ resume_load_addresses(Download download, const Object& object) {
 
   const Object::list_type& src = object.get_key_list("peers");
   
-  for (Object::list_type::const_iterator itr = src.begin(), last = src.end(); itr != last; ++itr) {
+  for (Object::list_const_iterator itr = src.begin(), last = src.end(); itr != last; ++itr) {
     if (!itr->is_map() ||
         !itr->has_key_string("inet") || itr->get_key_string("inet").size() != sizeof(SocketAddressCompact) ||
         !itr->has_key_value("failed") ||
@@ -247,7 +296,7 @@ resume_load_addresses(Download download, const Object& object) {
 void
 resume_save_addresses(Download download, Object& object) {
   const PeerList* peerList = download.peer_list();
-  Object&         dest     = object.insert_key("peers", Object(Object::TYPE_LIST));
+  Object&         dest     = object.insert_key("peers", Object::create_list());
 
   for (PeerList::const_iterator itr = peerList->begin(), last = peerList->end(); itr != last; ++itr) {
     // Add some checks, like see if there's anything interesting to
@@ -257,7 +306,7 @@ resume_save_addresses(Download download, Object& object) {
     // been closed for a while, it won't throw out perfectly good
     // entries.
 
-    Object& peer = dest.insert_back(Object(Object::TYPE_MAP));
+    Object& peer = dest.insert_back(Object::create_map());
 
     const rak::socket_address* sa = rak::socket_address::cast_from(itr->second->socket_address());
 
@@ -275,34 +324,30 @@ resume_load_tracker_settings(Download download, const Object& object) {
     return;
 
   const Object& src         = object.get_key("trackers");
-  TrackerList   trackerList = download.tracker_list();
+  TrackerList*  trackerList = download.tracker_list();
 
-  for (unsigned int i = 0; i < trackerList.size(); ++i) {
-    Tracker tracker = trackerList.get(i);
-
-    if (!src.has_key_map(tracker.url()))
+  for (TrackerList::iterator itr = trackerList->begin(), last = trackerList->end(); itr != last; ++itr) {
+    if (!src.has_key_map((*itr)->url()))
       continue;
 
-    const Object& trackerObject = src.get_key(tracker.url());
+    const Object& trackerObject = src.get_key((*itr)->url());
 
     if (trackerObject.has_key_value("enabled") && trackerObject.get_key_value("enabled") == 0)
-      tracker.disable();
+      (*itr)->disable();
     else
-      tracker.enable();
+      (*itr)->enable();
   }    
 }
 
 void
 resume_save_tracker_settings(Download download, Object& object) {
-  Object&     dest        = object.has_key_map("trackers") ? object.get_key("trackers") : object.insert_key("trackers", Object(Object::TYPE_MAP));
-  TrackerList trackerList = download.tracker_list();
+  Object& dest = object.insert_preserve_copy("trackers", Object::create_map()).first->second;
+  TrackerList* trackerList = download.tracker_list();
 
-  for (unsigned int i = 0; i < trackerList.size(); ++i) {
-    Tracker tracker = trackerList.get(i);
+  for (TrackerList::iterator itr = trackerList->begin(), last = trackerList->end(); itr != last; ++itr) {
+    Object& trackerObject = dest.insert_key((*itr)->url(), Object::create_map());
 
-    Object& trackerObject = dest.insert_key(tracker.url(), Object(Object::TYPE_MAP));
-
-    trackerObject.insert_key("enabled", Object((int64_t)tracker.is_enabled()));
+    trackerObject.insert_key("enabled", Object((int64_t)(*itr)->is_enabled()));
   }
 }
 

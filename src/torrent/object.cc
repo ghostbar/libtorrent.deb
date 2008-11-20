@@ -47,7 +47,6 @@ namespace torrent {
 Object&
 Object::get_key(const std::string& k) {
   check_throw(TYPE_MAP);
-
   map_type::iterator itr = m_map->find(k);
 
   if (itr == m_map->end())
@@ -60,13 +59,47 @@ Object::get_key(const std::string& k) {
 const Object&
 Object::get_key(const std::string& k) const {
   check_throw(TYPE_MAP);
-
   map_type::const_iterator itr = m_map->find(k);
 
   if (itr == m_map->end())
     throw bencode_error("Object operator [" + k + "] could not find element");
 
   return itr->second;
+}
+
+Object&
+Object::get_key(const char* k) {
+  check_throw(TYPE_MAP);
+  map_type::iterator itr = m_map->find(std::string(k));
+
+  if (itr == m_map->end())
+    throw bencode_error("Object operator [" + std::string(k) + "] could not find element");
+
+  return itr->second;
+}
+
+const Object&
+Object::get_key(const char* k) const {
+  check_throw(TYPE_MAP);
+  map_type::iterator itr = m_map->find(std::string(k));
+
+  if (itr == m_map->end())
+    throw bencode_error("Object operator [" + std::string(k) + "] could not find element");
+
+  return itr->second;
+}
+
+Object::map_insert_type
+Object::insert_preserve_type(const key_type& k, Object& b) {
+  check_throw(TYPE_MAP);
+  map_insert_type result = m_map->insert(map_type::value_type(k, b));
+
+  if (!result.second && result.first->second.type() != b.type()) {
+    result.first->second.swap(b);
+    result.second = true;
+  }
+
+  return result;
 }
 
 Object&
@@ -98,7 +131,7 @@ Object::merge_copy(const Object& object, uint32_t maxDepth) {
 
   if (object.is_map()) {
     if (!is_map())
-      *this = Object(TYPE_MAP);
+      *this = create_map();
 
     map_type& dest = as_map();
     map_type::iterator destItr = dest.begin();
@@ -121,7 +154,7 @@ Object::merge_copy(const Object& object, uint32_t maxDepth) {
 
   } else if (object.is_list()) {
     if (!is_list())
-      *this = Object(TYPE_LIST);
+      *this = create_list();
 
     list_type& dest = as_list();
     list_type::iterator destItr = dest.begin();
@@ -152,9 +185,10 @@ Object::operator = (const Object& src) {
 
   clear();
 
-  m_type = src.m_type;
+  // Need some more magic here?
+  m_flags = src.m_flags & mask_type;
 
-  switch (m_type) {
+  switch (type()) {
   case TYPE_NONE:   break;
   case TYPE_VALUE:  m_value = src.m_value; break;
   case TYPE_STRING: m_string = new string_type(*src.m_string); break;

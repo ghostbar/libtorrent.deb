@@ -42,10 +42,15 @@
 #include "data/chunk_list.h"
 #include "protocol/extensions.h"
 #include "protocol/handshake_manager.h"
+#include "protocol/initial_seed.h"
 #include "protocol/peer_connection_base.h"
+#include "protocol/peer_factory.h"
 #include "tracker/tracker_manager.h"
+#include "torrent/download.h"
 #include "torrent/exceptions.h"
 #include "torrent/data/file_list.h"
+#include "torrent/peer/connection_list.h"
+#include "torrent/peer/peer.h"
 #include "torrent/peer/peer_info.h"
 
 #include "available_list.h"
@@ -54,6 +59,8 @@
 #include "chunk_statistics.h"
 #include "download_info.h"
 #include "download_main.h"
+#include "download_manager.h"
+#include "download_wrapper.h"
 
 namespace torrent {
 
@@ -65,6 +72,7 @@ DownloadMain::DownloadMain() :
   m_chunkSelector(new ChunkSelector),
   m_chunkStatistics(new ChunkStatistics),
 
+  m_initialSeeding(NULL),
   m_uploadThrottle(NULL),
   m_downloadThrottle(NULL) {
 
@@ -104,6 +112,12 @@ DownloadMain::~DownloadMain() {
   if (m_taskTrackerRequest.is_queued())
     throw internal_error("DownloadMain::~DownloadMain(): m_taskTrackerRequest is queued.");
 
+  // Check if needed.
+  m_connectionList->clear();
+
+  if (m_info->size_pex() != 0)
+    throw internal_error("DownloadMain::~DownloadMain(): m_info->size_pex() != 0.");
+
   delete m_trackerManager;
   delete m_uploadChokeManager;
   delete m_downloadChokeManager;
@@ -116,17 +130,14 @@ DownloadMain::~DownloadMain() {
 
   m_ut_pex_delta.clear();
   m_ut_pex_initial.clear();
-
-  if (m_info->size_pex() != 0)
-    throw internal_error("DownloadMain::~DownloadMain(): m_info->size_pex() != 0.");
 }
 
 void
-DownloadMain::open() {
+DownloadMain::open(int flags) {
   if (info()->is_open())
     throw internal_error("Tried to open a download that is already open");
 
-  file_list()->open();
+  file_list()->open(flags & FileList::open_no_create);
 
   m_chunkList->resize(file_list()->size_chunks());
   m_chunkStatistics->initialize(file_list()->size_chunks());
@@ -186,10 +197,48 @@ DownloadMain::stop() {
   info()->set_active(false);
 
   m_slotStopHandshakes(this);
-
   connection_list()->erase_remaining(connection_list()->begin(), ConnectionList::disconnect_available);
 
+  delete m_initialSeeding;
+  m_initialSeeding = NULL;
+
   priority_queue_erase(&taskScheduler, &m_taskTrackerRequest);
+}
+
+bool
+DownloadMain::start_initial_seeding() {
+  if (!file_list()->is_done())
+    return false;
+
+  m_initialSeeding = new InitialSeeding(this);
+  return true;
+}
+
+void
+DownloadMain::initial_seeding_done(PeerConnectionBase* pcb) {
+  if (m_initialSeeding == NULL)
+    throw internal_error("DownloadMain::initial_seeding_done called when not initial seeding.");
+
+  // Close all connections but the currently active one (pcb).
+  // That one will be closed by throw close_connection() later.
+  if (m_connectionList->size() > 1) {
+    ConnectionList::iterator itr = std::find(m_connectionList->begin(), m_connectionList->end(), pcb);
+    if (itr == m_connectionList->end())
+      throw internal_error("DownloadMain::initial_seeding_done could not find current connection.");
+
+    std::iter_swap(m_connectionList->begin(), itr);
+    m_connectionList->erase_remaining(m_connectionList->begin() + 1, ConnectionList::disconnect_available);
+  }
+
+  // Switch to normal seeding.
+  DownloadManager::iterator itr = manager->download_manager()->find(m_info);
+  (*itr)->set_connection_type(Download::CONNECTION_SEED);
+  m_connectionList->slot_new_connection(&createPeerConnectionSeed);
+  delete m_initialSeeding;
+  m_initialSeeding = NULL;
+
+  // And close the current connection.
+  throw close_connection();
 }
 
 void
@@ -237,11 +286,11 @@ DownloadMain::receive_connect_peers() {
 
   while (!peer_list()->available_list()->empty() &&
          manager->connection_manager()->can_connect() &&
-         connection_list()->size() < connection_list()->get_min_size() &&
-         connection_list()->size() + m_slotCountHandshakes(this) < connection_list()->get_max_size()) {
+         connection_list()->size() < connection_list()->min_size() &&
+         connection_list()->size() + m_slotCountHandshakes(this) < connection_list()->max_size()) {
     rak::socket_address sa = peer_list()->available_list()->pop_random();
 
-    if (connection_list()->find(sa) == connection_list()->end())
+    if (connection_list()->find(sa.c_sockaddr()) == connection_list()->end())
       m_slotStartHandshake(sa, this);
   }
 }
@@ -257,7 +306,7 @@ DownloadMain::receive_tracker_success() {
 
 void
 DownloadMain::receive_tracker_request() {
-  if (connection_list()->size() >= connection_list()->get_min_size())
+  if (connection_list()->size() >= connection_list()->min_size())
     return;
 
   if (m_info->is_pex_enabled() || connection_list()->size() < m_lastConnectedSize + 10)
@@ -284,7 +333,7 @@ DownloadMain::do_peer_exchange() {
   int togglePex = 0;
 
   if (!m_info->is_pex_active() &&
-      m_connectionList->size() < m_connectionList->get_min_size() / 2 &&
+      m_connectionList->size() < m_connectionList->min_size() / 2 &&
       m_peerList.available_list()->size() < m_peerList.available_list()->max_size() / 4) {
     m_info->set_pex_active(true);
 
@@ -293,7 +342,7 @@ DownloadMain::do_peer_exchange() {
       togglePex = PeerConnectionBase::PEX_ENABLE;
 
   } else if (m_info->is_pex_active() &&
-             m_connectionList->size() >= m_connectionList->get_min_size()) {
+             m_connectionList->size() >= m_connectionList->min_size()) {
 //              m_peerList.available_list()->size() >= m_peerList.available_list()->max_size() / 2) {
     togglePex = PeerConnectionBase::PEX_DISABLE;
     m_info->set_pex_active(false);
@@ -304,31 +353,32 @@ DownloadMain::do_peer_exchange() {
   ProtocolExtension::PEXList current;
 
   for (ConnectionList::iterator itr = m_connectionList->begin(); itr != m_connectionList->end(); ++itr) {
-    const rak::socket_address* sa = rak::socket_address::cast_from((*itr)->peer_info()->socket_address());
+    PeerConnectionBase* pcb = (*itr)->m_ptr();
+    const rak::socket_address* sa = rak::socket_address::cast_from(pcb->peer_info()->socket_address());
 
-    if ((*itr)->peer_info()->listen_port() != 0 && sa->family() == rak::socket_address::af_inet)
-      current.push_back(SocketAddressCompact(sa->sa_inet()->address_n(), (*itr)->peer_info()->listen_port()));
+    if (pcb->peer_info()->listen_port() != 0 && sa->family() == rak::socket_address::af_inet)
+      current.push_back(SocketAddressCompact(sa->sa_inet()->address_n(), pcb->peer_info()->listen_port()));
 
-    if (!(*itr)->extensions()->is_remote_supported(ProtocolExtension::UT_PEX))
+    if (!pcb->extensions()->is_remote_supported(ProtocolExtension::UT_PEX))
       continue;
 
     if (togglePex == PeerConnectionBase::PEX_ENABLE) {
-      (*itr)->set_peer_exchange(true);
+      pcb->set_peer_exchange(true);
 
       if (m_info->size_pex() >= m_info->max_size_pex())
         togglePex = 0;
 
-    } else if (!(*itr)->extensions()->is_local_enabled(ProtocolExtension::UT_PEX)) {
+    } else if (!pcb->extensions()->is_local_enabled(ProtocolExtension::UT_PEX)) {
       continue;
 
     } else if (togglePex == PeerConnectionBase::PEX_DISABLE) {
-      (*itr)->set_peer_exchange(false);
+      pcb->set_peer_exchange(false);
 
       continue;
     }
 
     // Still using the old buffer? Make a copy in this rare case.
-    DataBuffer* message = (*itr)->extension_message();
+    DataBuffer* message = pcb->extension_message();
 
     if (!message->empty() && (message->data() == m_ut_pex_initial.data() || message->data() == m_ut_pex_delta.data())) {
       char* buffer = new char[message->length()];
@@ -336,7 +386,7 @@ DownloadMain::do_peer_exchange() {
       message->set(buffer, buffer + message->length(), true);
     }
 
-    (*itr)->do_peer_exchange();
+    pcb->do_peer_exchange();
   }
 
   std::sort(current.begin(), current.end(), SocketAddressCompact_less());

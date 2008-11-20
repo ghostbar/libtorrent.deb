@@ -51,17 +51,19 @@
 namespace torrent {
 
 File::File() :
+  m_fd(-1),
+  m_protection(0),
+  m_flags(0),
+
   m_offset(0),
   m_size(0),
+  m_lastTouched(cachedTime.usec()),
+
   m_completed(0),
   m_priority(PRIORITY_NORMAL),
 
   m_matchDepthPrev(0),
-  m_matchDepthNext(0),
-
-  m_fd(-1),
-  m_protection(0),
-  m_lastTouched(cachedTime.usec()) {
+  m_matchDepthNext(0) {
 }
 
 File::~File() {
@@ -95,17 +97,39 @@ File::is_correct_size() const {
   return fs.is_regular() && (uint64_t)fs.size() == m_size;
 }
 
+// At some point we should pass flags for deciding if the correct size
+// is necessary, etc.
+
 bool
 File::prepare(int prot, int flags) {
-//   if (!m_slotPrepare.is_valid())
-//     return false;
-
   m_lastTouched = cachedTime.usec();
+
+  // Check if we got write protection and flag_resize_queued is
+  // set. If so don't quit as we need to try re-sizing, instead call
+  // resize_file.
 
   if (is_open() && has_permissions(prot))
     return true;
 
-  return manager->file_manager()->open(this, prot, flags);
+  // For now don't allow overridding this check in prepare.
+  if (m_flags & flag_create_queued)
+    flags |= SocketFile::o_create;
+  else
+    flags &= ~SocketFile::o_create;
+
+  if (!manager->file_manager()->open(this, prot, flags))
+    return false;
+
+  m_flags |= flag_previously_created;
+  m_flags &= ~flag_create_queued;
+
+  // Replace PROT_WRITE with something prettier.
+  if ((m_flags & flag_resize_queued) && has_permissions(PROT_WRITE)) {
+    m_flags &= ~flag_resize_queued;
+    return resize_file();
+  }
+
+  return true;
 }
 
 void
@@ -118,22 +142,30 @@ File::set_range(uint32_t chunkSize) {
     m_range = File::range_type(m_offset / chunkSize, (m_offset + m_size + chunkSize - 1) / chunkSize);
 }
 
+void
+File::set_match_depth(File* left, File* right) {
+  uint32_t level = 0;
+
+  Path::const_iterator itrLeft = left->path()->begin();
+  Path::const_iterator itrRight = right->path()->begin();
+
+  while (itrLeft != left->path()->end() && itrRight != right->path()->end() && *itrLeft == *itrRight) {
+    itrLeft++;
+    itrRight++;
+    level++;
+  }
+
+  left->m_matchDepthNext = level;
+  right->m_matchDepthPrev = level;
+}
+
 bool
 File::resize_file() {
-  if (!prepare(MemoryChunk::prot_read))
+  if (!is_open())
     return false;
 
-  if (m_size == SocketFile(m_fd).size())
-    return true;
-
-  if (!prepare(MemoryChunk::prot_read | MemoryChunk::prot_write) ||
-      !SocketFile(m_fd).set_size(m_size))
-    return false;
-  
-  // Not here... make it a setting of sorts?
-  //get_file().reserve();
-
-  return true;
+  // This doesn't try to re-open it as rw.
+  return m_size == SocketFile(m_fd).size() || SocketFile(m_fd).set_size(m_size);
 }
 
 }

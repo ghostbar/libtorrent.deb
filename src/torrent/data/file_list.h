@@ -141,15 +141,17 @@ public:
 
   void                update_paths(iterator first, iterator last);
 
-  void                set_file_completed_chunks(iterator itr, uint32_t v);
+  bool                make_root_path();
+  bool                make_all_paths();
 
 protected:
+  static const int open_no_create        = (1 << 0);
+  static const int open_require_all_open = (1 << 1);
+
   void                initialize(uint64_t torrentSize, uint32_t chunkSize) LIBTORRENT_NO_EXPORT;
 
-  void                open() LIBTORRENT_NO_EXPORT;
+  void                open(int flags) LIBTORRENT_NO_EXPORT;
   void                close() LIBTORRENT_NO_EXPORT;
-
-  bool                resize_all() LIBTORRENT_NO_EXPORT;
 
   Bitfield*           mutable_bitfield()                               { return &m_bitfield; }
 
@@ -163,11 +165,9 @@ protected:
   void                update_completed() LIBTORRENT_NO_EXPORT;
 
 private:
-  bool                open_file(File* node, const Path& lastPath) LIBTORRENT_NO_EXPORT;
+  bool                open_file(File* node, const Path& lastPath, int flags) LIBTORRENT_NO_EXPORT;
   void                make_directory(Path::const_iterator pathBegin, Path::const_iterator pathEnd, Path::const_iterator startItr) LIBTORRENT_NO_EXPORT;
   MemoryChunk         create_chunk_part(FileList::iterator itr, uint64_t offset, uint32_t length, int prot) LIBTORRENT_NO_EXPORT;
-
-  void                set_match_depth(File* left, File* right);
 
   bool                m_isOpen;
 

@@ -39,11 +39,27 @@
 
 #include "peer_connection_base.h"
 
+#include "torrent/download.h"
+
 namespace torrent {
 
-class PeerConnectionLeech : public PeerConnectionBase {
+// Type-specific data.
+template<Download::ConnectionType type> struct PeerConnectionData;
+
+template<> struct PeerConnectionData<Download::CONNECTION_LEECH> { };
+
+template<> struct PeerConnectionData<Download::CONNECTION_SEED> { };
+
+template<> struct PeerConnectionData<Download::CONNECTION_INITIAL_SEED> {
+  PeerConnectionData() : lastIndex(~uint32_t()) { }
+  uint32_t lastIndex;
+  uint32_t bytesLeft;
+};
+
+template<Download::ConnectionType type>
+class PeerConnection : public PeerConnectionBase {
 public:
-  ~PeerConnectionLeech();
+  ~PeerConnection();
 
   virtual void        initialize_custom();
   virtual void        update_interested();
@@ -56,7 +72,12 @@ private:
   inline bool         read_message();
   void                read_have_chunk(uint32_t index);
 
+  void                offer_chunk();
+  bool                should_upload();
+
   inline void         fill_write_buffer();
+
+  PeerConnectionData<type> m_data;
 };
 
 }
