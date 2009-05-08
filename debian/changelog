@@ -1,5 +1,6 @@
 libtorrent (0.12.4-2) unstable; urgency=low
 
+  [ Rogério Brito ]
   * debian/changelog:
     + prepare an upload meant to unstable.
   * debian/copyright:
@@ -19,8 +20,11 @@ libtorrent (0.12.4-2) unstable; urgency=low
     is better than a Debian specific fix and it has been this way for
     quite some time now).
   * more changes to come in the near future.
+  [ Dmitry E. Oboukhov ]
+  * debian/control:
+    + add myself as an uploader.
 
- -- Rogério Brito <rbrito@ime.usp.br>  Thu, 07 May 2009 04:54:50 -0300
+ -- Dmitry E. Oboukhov <unera@debian.org>  Fri, 08 May 2009 20:17:41 +0400
 
 libtorrent (0.12.4-1) experimental; urgency=low
 
