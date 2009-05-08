@@ -5,6 +5,7 @@ include /usr/share/cdbs/1/class/autotools.mk
 
 architecture:=$(shell dpkg --print-architecture)
 DEB_OPT_FLAG = -W -fno-strict-aliasing
+LDFLAGS = -Wl,--as-needed
 ifeq ($(architecture),arm)
 CXXFLAGS = -O2 -mcpu=xscale -mtune=xscale
 endif

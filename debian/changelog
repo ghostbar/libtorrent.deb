@@ -1,16 +1,67 @@
-libtorrent (0.12.3-1) unstable; urgency=low
+libtorrent (0.12.4-2) unstable; urgency=low
+
+  * debian/changelog:
+    + prepare an upload meant to unstable.
+  * debian/copyright:
+    + fix lintian warning regarding versionless link to GPL.
+  * debian/control:
+    + add myself as an uploader (discussed with Jose and Adeodato).
+    + word-wrap the build dependencies field (for more legibility).
+    + include ${misc:Depends} in the binary libtorrent-dev.
+    + include comment at the top of the file (policy 3.8.1 allows it).
+    + update Standards-Version to 3.8.1.
+  * debian/rules:
+    + add --as-needed linker option to reduce library dependencies.
+    + TODO: create a -dbg package.
+    + TODO: create a symbols file.
+  * Notice: the library still doesn't provide symbol files because it
+    seems to export many private symbols. This will be sent upstream (it
+    is better than a Debian specific fix and it has been this way for
+    quite some time now).
+  * more changes to come in the near future.
+
+ -- Rogério Brito <rbrito@ime.usp.br>  Thu, 07 May 2009 04:54:50 -0300
+
+libtorrent (0.12.4-1) experimental; urgency=low
+
+  * New Upstream Version
+  * Updated debian/ChangeLog file.
+  * debian/copyright: Added copyright notice of src/utils/sha_fast.*
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 19 Nov 2008 13:54:25 -0430
+
+libtorrent (0.12.3-1) experimental; urgency=low
 
   * New upstream release.
-  * Patches for fixing >= gcc-4.3 are applied from upstream (Closes: #505355).
+  * Patches are applied from upstream, deleted.
   * Updated build-depends and added libcurl4-openssl-dev.
-  * Bumped to 3.8.0 Standards-Version.
+  * Bumped to 3.8.0 Standards-Version
   * Bumped libtorrent10 to libtorrent11 by SONAME version.
   * Refreshed debian/copyright.
   * Removed Arnaud Andesi from Uploaders.
   * Removed XS- From Vcs fields and updated these fields.
   * Updated debian/ChangeLog file.
 
- -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 19 Nov 2008 22:09:04 -0430
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Mon, 17 Nov 2008 23:48:01 -0430
+
+libtorrent (0.12.2-1) experimental; urgency=low
+
+  * New upstream release
+  * Deleted debian/patches/update-changelog.patch:
+   + Now is shipped in a plain text file, easier to maintain.
+  * debian/control:
+   + Added "by Rakshasa" to the short description of the package.
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Thu, 08 May 2008 22:51:25 -0430
+
+libtorrent (0.12.1-1) experimental; urgency=low
+
+  * New upstream release.
+  * debian/rules:
+   + Added `-W' flag (Closes: #449214).
+   + Added CXXFLAGS to build with xscale if arch is arm (Closes: #441362).
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Thu, 08 May 2008 21:43:35 -0430
 
 libtorrent (0.11.9-1.1) unstable; urgency=low
 
