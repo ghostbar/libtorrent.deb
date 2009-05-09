@@ -1,5 +1,7 @@
 #!/usr/bin/make -f
 
+DEB_TAR_SRCDIR	= libtorrent-0.12.4
+include /usr/share/cdbs/1/rules/tarball.mk
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/autotools.mk
 
@@ -13,3 +15,6 @@ DEB_CONFIGURE_EXTRA_FLAGS = --enable-aligned
 DEB_DH_INSTALL_SOURCEDIR = debian/tmp
 DEB_INSTALL_DOCS_ALL := --exclude=NEWS
 DEB_INSTALL_CHANGELOGS_ALL := debian/ChangeLog
+
+clean::
+	rm -f *.cdbs-config_list

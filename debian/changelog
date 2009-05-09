@@ -1,3 +1,11 @@
+libtorrent (0.12.4+tit-1) unstable; urgency=low
+
+  * Fixed incorrect merge of previous upload, closes: #527882,
+    this version is really 0.12.4.
+  * Now we use tar-in-tar build system (added +tit as suffix into version).
+
+ -- Dmitry E. Oboukhov <unera@debian.org>  Sat, 09 May 2009 19:41:45 +0400
+
 libtorrent (0.12.4-2) unstable; urgency=low
 
   [ Rogério Brito ]
