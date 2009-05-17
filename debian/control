@@ -2,10 +2,10 @@
 Source: libtorrent
 Priority: extra
 Section: libs
-Maintainer: Jose Luis Rivas <ghostbar38@gmail.com>
+Maintainer: Rogério Brito <rbrito@ime.usp.br>
 DM-Upload-Allowed: yes
-Uploaders: Rogério Brito <rbrito@ime.usp.br>,
- Dmitry E. Oboukhov <unera@debian.org>
+Uploaders: Jose Luis Rivas <ghostbar38@gmail.com>,
+	Dmitry E. Oboukhov <unera@debian.org>
 Build-Depends: debhelper (>= 5), cdbs, libsigc++-2.0-dev, libcurl4-openssl-dev,
 	       libssl-dev
 Standards-Version: 3.8.1
@@ -27,7 +27,6 @@ Description: a C++ BitTorrent library by Rakshasa (development files)
 
 Package: libtorrent11
 Architecture: any
-Recommends: rtorrent
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: a C++ BitTorrent library by Rakshasa
  LibTorrent is a BitTorrent library written in C++ for *nix. It is

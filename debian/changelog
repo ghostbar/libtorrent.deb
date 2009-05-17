@@ -1,3 +1,12 @@
+libtorrent (0.12.4+tit-2) unstable; urgency=low
+
+  * Putting myself as the maintainer. Jose told me that he is busy with
+    his duties and he is free to revert this change as he pleases.
+  * Ubuntu people: please contribute your changes! Please.
+  * debian/control: remove recommends of rtorrent in the package
+
+ -- Rogério Brito <rbrito@ime.usp.br>  Sun, 17 May 2009 00:51:37 -0300
+
 libtorrent (0.12.4+tit-1) unstable; urgency=low
 
   * Fixed incorrect merge of previous upload, closes: #527949,
