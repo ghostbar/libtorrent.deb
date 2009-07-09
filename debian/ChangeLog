@@ -1,3 +1,51 @@
+2009-06-18  Jari Sundell <sundell.software@gmail.com>
+
+	* Add support for any number of custom download values identified by
+	string keys.
+	d.set_custom=key,value
+	d.get_custom=key (returns "" if not set)
+	d.get_custom_throw=key (returns error if not set)
+
+	* With this patch, rtorrent will detect and complain about .torrent
+	files with broken bencode representation (e.g. where the order of
+	dictionary keys is not lexicographic).
+
+	* Choose a different poll type using the RTORRENT_POLL env. variable
+	(if it's implemented), probably only useful as RTORRENT_POLL=select.
+
+	* Add the commands execute_capture and execute_capture_nothrow that
+	work like their other counterparts but return the OUTPUT (stdout) of
+	the given command.
+
+	* Fixes the code that detects which peer was sending bad data. Peers
+	are then automatically banned after sending three bad chunks.
+
+	* Stops rtorrent from always creating and resizing ALL files, even
+	those set to "off". Files will still be created, but with a size of
+	zero, until a part of them is getting downloaded. This helps with
+	filesystems that don't support sparse files (such as FAT, HFS+, and
+	others).
+
+	* Fix inefficient piece distribution due to linear chunk request
+	strategy by randomizing position every few (on average 32) chunks, see
+	ticket #190.
+
+	* Enable custom throttles, both per-download or per-IP. See
+	http://libtorrent.rakshasa.no/ticket/20 for info and instructions.
+
+	* Fix crashes/errors due to rtorrent attempting to pass non-utf-8
+	strings to xmlrpc.
+
+	* Added support for using posix_fallocate on newly resized files.
+
+	* Include locally available chunks in the "chunks seen" statistics for
+	completed/distributed copies. Patch by Josef Drexler.
+
+	* Added 'd.get_bitfield' command for retrieving the bitfield in hex
+	format. Patch by Thomas Rosner.
+
+	* Fixed include headers for gcc-4.4.0. Patch by 'kloeri'.
+
 2008-11-19  Jari Sundell <sundell.software@gmail.com>
 
 	* Work-around for OpenBSD's broken sys/event.h, which fails to compile

@@ -1,3 +1,10 @@
+libtorrent (0.12.5-2) UNRELEASED; urgency=low
+
+  * Updated debian/ChangeLog for 0.12.5.
+  * Updated to Standards-Version 3.8.2 wo/ any change needed.
+
+ -- Jose Luis Rivas <ghostbar38@gmail.com>  Wed, 08 Jul 2009 22:52:58 -0430
+
 libtorrent (0.12.5-1) unstable; urgency=low
 
   * New upstream version.
