@@ -1,3 +1,11 @@
+libtorrent (0.12.6-2) unstable; urgency=low
+
+  * Applied patch to fix "encryption = try_outgoing,enable_retry" option,
+    thanks for Tobias Diedrich <ranma+debianbts@tdiedrich.de>,
+    closes: #561232.
+
+ -- Dmitry E. Oboukhov <unera@debian.org>  Fri, 08 Jan 2010 15:18:09 +0300
+
 libtorrent (0.12.6-1) unstable; urgency=low
 
   * New upstream stable version.
