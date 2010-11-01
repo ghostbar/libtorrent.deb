@@ -1,5 +1,5 @@
---- build-tree/libtorrent-0.12.6/src/protocol/handshake_manager.cc
-+++ build-tree/libtorrent-0.12.6/src/protocol/handshake_manager.cc
+--- a/src/protocol/handshake_manager.cc
++++ b/src/protocol/handshake_manager.cc
 @@ -134,8 +134,12 @@
  
  void
@@ -22,8 +22,8 @@
      create_outgoing(*sa, download, retry_options);
    }
  
---- build-tree/libtorrent-0.12.6/src/torrent/connection_manager.h
-+++ build-tree/libtorrent-0.12.6/src/torrent/connection_manager.h
+--- a/src/torrent/connection_manager.h
++++ b/src/torrent/connection_manager.h
 @@ -86,6 +86,7 @@
  
    // Internal to libtorrent.
@@ -32,5 +32,3 @@
  
    enum {
      handshake_incoming           = 1,
-
-
