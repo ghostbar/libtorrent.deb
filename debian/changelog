@@ -1,3 +1,9 @@
+libtorrent (0.12.7-1) UNRELEASED; urgency=low
+
+  * New upstream version.
+
+ -- Rogério Brito <rbrito@ime.usp.br>  Mon, 01 Nov 2010 15:16:48 -0200
+
 libtorrent (0.12.6-2) unstable; urgency=low
 
   * Applied patch to fix "encryption = try_outgoing,enable_retry" option,
