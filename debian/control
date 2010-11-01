@@ -6,7 +6,7 @@ Maintainer: Rogério Brito <rbrito@ime.usp.br>
 DM-Upload-Allowed: yes
 Uploaders: Jose Luis Rivas <ghostbar@debian.org>,
 	Dmitry E. Oboukhov <unera@debian.org>
-Build-Depends: debhelper (>= 5), cdbs, libsigc++-2.0-dev, libcurl4-openssl-dev,
+Build-Depends: debhelper (>= 5), libsigc++-2.0-dev, libcurl4-openssl-dev,
 	       libssl-dev
 Standards-Version: 3.8.3
 Vcs-git: git://git.debian.org/git/collab-maint/libtorrent.git
