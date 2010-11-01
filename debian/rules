@@ -1,21 +1,3 @@
 #!/usr/bin/make -f
-
-DEB_TAR_SRCDIR	= libtorrent-0.12.6
-include /usr/share/cdbs/1/rules/tarball.mk
-include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/class/autotools.mk
-include /usr/share/cdbs/1/rules/simple-patchsys.mk
-
-architecture:=$(shell dpkg --print-architecture)
-DEB_OPT_FLAG = -W -fno-strict-aliasing
-LDFLAGS = -Wl,--as-needed
-ifeq ($(architecture),arm)
-CXXFLAGS = -O2 -mcpu=xscale -mtune=xscale
-endif
-DEB_CONFIGURE_EXTRA_FLAGS = --enable-aligned
-DEB_DH_INSTALL_SOURCEDIR = debian/tmp
-DEB_INSTALL_DOCS_ALL := --exclude=NEWS
-DEB_INSTALL_CHANGELOGS_ALL := debian/ChangeLog
-
-clean::
-	rm -f *.cdbs-config_list
+%:
+	dh $@
