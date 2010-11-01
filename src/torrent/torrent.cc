@@ -160,6 +160,8 @@ client_list() {
   return manager->client_list();
 }
 
+FileManager* file_manager() { return manager->file_manager(); }
+
 ConnectionManager*
 connection_manager() {
   return manager->connection_manager();
@@ -169,6 +171,8 @@ DhtManager*
 dht_manager() {
   return manager->dht_manager();
 }
+
+//TaskManager* task_manager() { return manager->task_manager(); }
 
 uint32_t
 total_handshakes() {
@@ -285,24 +289,6 @@ set_hash_max_tries(uint32_t tries) {
   manager->hash_queue()->set_max_tries(tries);
 }  
 
-uint32_t
-open_files() {
-  return manager->file_manager()->open_files();
-}
-
-uint32_t
-max_open_files() {
-  return manager->file_manager()->max_open_files();
-}
-
-void
-set_max_open_files(uint32_t size) {
-  if (size < 4 || size > (1 << 16))
-    throw input_error("Max open files must be between 4 and 2^16.");
-
-  manager->file_manager()->set_max_open_files(size);
-}
-
 EncodingList*
 encoding_list() {
   return manager->encoding_list();
@@ -318,10 +304,21 @@ download_add(Object* object) {
 
   ctor.initialize(*object);
 
-  std::string infoHash = object_sha1(&object->get_key("info"));
+  std::string infoHash;
+  if (download->info()->is_meta_download())
+    infoHash = object->get_key("info").get_key("pieces").as_string();
+  else
+    infoHash = object_sha1(&object->get_key("info"));
 
   if (manager->download_manager()->find(infoHash) != manager->download_manager()->end())
     throw input_error("Info hash already used by another torrent.");
+
+  if (!download->info()->is_meta_download()) {
+    char buffer[1024];
+    uint64_t metadata_size = 0;
+    object_write_bencode_c(&object_write_to_size, &metadata_size, object_buffer_t(buffer, buffer + sizeof(buffer)), &object->get_key("info"));
+    download->main()->set_metadata_size(metadata_size);
+  }
 
   download->set_hash_queue(manager->hash_queue());
   download->initialize(infoHash, PEER_NAME + rak::generate_random<std::string>(20 - std::string(PEER_NAME).size()));

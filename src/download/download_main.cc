@@ -48,6 +48,7 @@
 #include "tracker/tracker_manager.h"
 #include "torrent/download.h"
 #include "torrent/exceptions.h"
+#include "torrent/throttle.h"
 #include "torrent/data/file_list.h"
 #include "torrent/peer/connection_list.h"
 #include "torrent/peer/peer.h"
@@ -57,12 +58,28 @@
 #include "choke_manager.h"
 #include "chunk_selector.h"
 #include "chunk_statistics.h"
-#include "download_info.h"
 #include "download_main.h"
 #include "download_manager.h"
 #include "download_wrapper.h"
 
 namespace torrent {
+
+DownloadInfo::DownloadInfo() :
+  m_flags(flag_compact | flag_accepting_new_peers | flag_pex_enabled | flag_pex_active),
+
+  m_upRate(60),
+  m_downRate(60),
+  m_skipRate(60),
+  
+  m_uploadedBaseline(0),
+  m_completedBaseline(0),
+  m_sizePex(0),
+  m_maxSizePex(8),
+  m_metadataSize(0),
+  
+  m_creationDate(0),
+  m_loadDate(rak::timer::current_seconds()) {
+}
 
 DownloadMain::DownloadMain() :
   m_info(new DownloadInfo),
@@ -102,6 +119,7 @@ DownloadMain::DownloadMain() :
   m_delegator.transfer_list()->slot_completed(std::bind1st(std::mem_fun(&DownloadMain::receive_chunk_done), this));
   m_delegator.transfer_list()->slot_corrupt(std::bind1st(std::mem_fun(&DownloadMain::receive_corrupt_chunk), this));
 
+  m_delayDisconnectPeers.set_slot(rak::mem_fn(m_connectionList, &ConnectionList::disconnect_queued));
   m_taskTrackerRequest.set_slot(rak::mem_fn(this, &DownloadMain::receive_tracker_request));
 
   m_chunkList->slot_create_chunk(rak::make_mem_fun(file_list(), &FileList::create_chunk_index));
@@ -132,6 +150,17 @@ DownloadMain::~DownloadMain() {
   m_ut_pex_initial.clear();
 }
 
+std::pair<ThrottleList*, ThrottleList*>
+DownloadMain::throttles(const sockaddr* sa) {
+  ThrottlePair pair = ThrottlePair(NULL, NULL);
+
+  if (!manager->connection_manager()->address_throttle().empty())
+    pair = manager->connection_manager()->address_throttle()(sa);
+
+  return std::make_pair(pair.first == NULL ? upload_throttle() : pair.first->throttle_list(),
+                        pair.second == NULL ? download_throttle() : pair.second->throttle_list());
+}
+
 void
 DownloadMain::open(int flags) {
   if (info()->is_open())
@@ -142,7 +171,7 @@ DownloadMain::open(int flags) {
   m_chunkList->resize(file_list()->size_chunks());
   m_chunkStatistics->initialize(file_list()->size_chunks());
 
-  info()->set_open(true);
+  info()->set_flags(DownloadInfo::flag_open);
 }
 
 void
@@ -153,7 +182,7 @@ DownloadMain::close() {
   if (!info()->is_open())
     return;
 
-  info()->set_open(false);
+  info()->unset_flags(DownloadInfo::flag_open);
 
   // Don't close the tracker manager here else it will cause STOPPED
   // requests to be lost. TODO: Check that this is valid.
@@ -178,7 +207,7 @@ void DownloadMain::start() {
   if (info()->is_active())
     throw internal_error("Tried to start an active download");
 
-  info()->set_active(true);
+  info()->set_flags(DownloadInfo::flag_active);
   m_lastConnectedSize = 0;
 
   m_delegator.set_aggressive(false);
@@ -194,7 +223,7 @@ DownloadMain::stop() {
 
   // Set this early so functions like receive_connect_peers() knows
   // not to eat available peers.
-  info()->set_active(false);
+  info()->unset_flags(DownloadInfo::flag_active);
 
   m_slotStopHandshakes(this);
   connection_list()->erase_remaining(connection_list()->begin(), ConnectionList::disconnect_available);
@@ -202,6 +231,7 @@ DownloadMain::stop() {
   delete m_initialSeeding;
   m_initialSeeding = NULL;
 
+  priority_queue_erase(&taskScheduler, &m_delayDisconnectPeers);
   priority_queue_erase(&taskScheduler, &m_taskTrackerRequest);
 }
 
@@ -267,7 +297,14 @@ DownloadMain::receive_corrupt_chunk(PeerInfo* peerInfo) {
   // don't recalculate these things whenever the peer reconnects.
 
   // That is... non at all ;)
-  connection_list()->erase(peerInfo, ConnectionList::disconnect_unwanted);
+
+  if (peerInfo->failed_counter() > HandshakeManager::max_failed)
+    connection_list()->erase(peerInfo, ConnectionList::disconnect_unwanted);
+}
+
+void
+DownloadMain::add_peer(const rak::socket_address& sa) {
+  m_slotStartHandshake(sa, this);
 }
 
 void
@@ -335,7 +372,7 @@ DownloadMain::do_peer_exchange() {
   if (!m_info->is_pex_active() &&
       m_connectionList->size() < m_connectionList->min_size() / 2 &&
       m_peerList.available_list()->size() < m_peerList.available_list()->max_size() / 4) {
-    m_info->set_pex_active(true);
+    m_info->set_flags(DownloadInfo::flag_pex_active);
 
     // Only set PEX_ENABLE if we don't have max_size_pex set to zero.
     if (m_info->size_pex() < m_info->max_size_pex())
@@ -345,7 +382,7 @@ DownloadMain::do_peer_exchange() {
              m_connectionList->size() >= m_connectionList->min_size()) {
 //              m_peerList.available_list()->size() >= m_peerList.available_list()->max_size() / 2) {
     togglePex = PeerConnectionBase::PEX_DISABLE;
-    m_info->set_pex_active(false);
+    m_info->unset_flags(DownloadInfo::flag_pex_active);
   }
 
   // Return if we don't really want to do anything?
@@ -434,6 +471,21 @@ DownloadMain::do_peer_exchange() {
     m_ut_pex_initial.clear();
     m_ut_pex_initial = ProtocolExtension::generate_ut_pex_message(m_ut_pex_list, current);
   }
+}
+
+void
+DownloadMain::set_metadata_size(size_t size) {
+  if (m_info->is_meta_download()) {
+    if (m_fileList.size_bytes() < 2)
+      file_list()->reset_filesize(size);
+    else if (size != m_fileList.size_bytes())
+      throw communication_error("Peer-supplied metadata size mismatch.");
+
+  } else if (m_info->metadata_size() && m_info->metadata_size() != size) {
+      throw communication_error("Peer-supplied metadata size mismatch.");
+  }
+
+  m_info->set_metadata_size(size);
 }
 
 }

@@ -44,8 +44,8 @@
 
 #include "net/socket_datagram.h"
 #include "net/throttle_node.h"
-#include "download/download_info.h"  // for SocketAddressCompact
 #include "torrent/hash_string.h"
+#include "torrent/object_raw_bencode.h"
 
 #include "dht_transaction.h"
 
@@ -56,6 +56,7 @@ class DhtNode;
 class DhtRouter;
 
 class DownloadInfo;
+class DhtMessage;
 class TrackerDht;
 
 // UDP server that handles the DHT node communications.
@@ -72,6 +73,8 @@ public:
   unsigned int        queries_received() const           { return m_queriesReceived; }
   unsigned int        queries_sent() const               { return m_queriesSent; }
   unsigned int        replies_received() const           { return m_repliesReceived; }
+  unsigned int        errors_received() const            { return m_errorsReceived; }
+  unsigned int        errors_caught() const              { return m_errorsCaught; }
   void                reset_statistics();
 
   // Contact a node to see if it replies. Set id=0 if unknown.
@@ -90,10 +93,13 @@ public:
   // Called every 15 minutes.
   void                update();
 
-  ThrottleNode*       upload_throttle()                          { return &m_uploadThrottle; }
-  const ThrottleNode* upload_throttle() const                    { return &m_uploadThrottle; }
-  ThrottleNode*       download_throttle()                        { return &m_downloadThrottle; }
-  const ThrottleNode* download_throttle() const                  { return &m_downloadThrottle; }
+  ThrottleNode*       upload_throttle_node()                  { return &m_uploadNode; }
+  const ThrottleNode* upload_throttle_node() const            { return &m_uploadNode; }
+  ThrottleNode*       download_throttle_node()                { return &m_downloadNode; }
+  const ThrottleNode* download_throttle_node() const          { return &m_downloadNode; }
+
+  void                set_upload_throttle(ThrottleList* t)    { m_uploadThrottle = t; }
+  void                set_download_throttle(ThrottleList* t)  { m_downloadThrottle = t; }
 
   virtual void        event_read();
   virtual void        event_write();
@@ -106,8 +112,6 @@ private:
   static const int dht_error_protocol   = 203;
   static const int dht_error_bad_method = 204;
 
-  typedef std::deque<DhtTransactionPacket*> packet_queue;
-
   struct compact_node_info {
     char                 _id[20];
     SocketAddressCompact _addr;
@@ -115,6 +119,8 @@ private:
     HashString&          id()          { return *HashString::cast_from(_id); }
     rak::socket_address  address()     { return rak::socket_address(_addr); }
   } __attribute__ ((packed));
+
+  typedef std::deque<DhtTransactionPacket*> packet_queue;
   typedef std::list<compact_node_info> node_info_list;
 
   // Pending transactions.
@@ -131,23 +137,23 @@ private:
 
   void                start_write();
 
-  void                process_query(const Object& transaction, const HashString& id, const rak::socket_address* sa, Object& req);
-  void                process_response(int transaction, const HashString& id, const rak::socket_address* sa, Object& req);
-  void                process_error(int transaction, const rak::socket_address* sa, Object& req);
+  void                process_query(const HashString& id, const rak::socket_address* sa, const DhtMessage& req);
+  void                process_response(const HashString& id, const rak::socket_address* sa, const DhtMessage& req);
+  void                process_error(const rak::socket_address* sa, const DhtMessage& error);
 
-  void                parse_find_node_reply(DhtTransactionSearch* t, const std::string& nodes);
-  void                parse_get_peers_reply(DhtTransactionGetPeers* t, const Object& res);
+  void                parse_find_node_reply(DhtTransactionSearch* t, raw_string nodes);
+  void                parse_get_peers_reply(DhtTransactionGetPeers* t, const DhtMessage& res);
 
   void                find_node_next(DhtTransactionSearch* t);
 
   void                add_packet(DhtTransactionPacket* packet, int priority);
   void                create_query(transaction_itr itr, int tID, const rak::socket_address* sa, int priority);
-  void                create_response(const Object& transactionID, const rak::socket_address* sa, Object& r);
-  void                create_error(const Object* transactionID, const rak::socket_address* sa, int num, const std::string& msg);
+  void                create_response(const DhtMessage& req, const rak::socket_address* sa, DhtMessage& reply);
+  void                create_error(const DhtMessage& req, const rak::socket_address* sa, int num, const char* msg);
 
-  void                create_find_node_response(const Object& arg, Object& reply);
-  void                create_get_peers_response(const Object& arg, const rak::socket_address* sa, Object& reply);
-  void                create_announce_peer_response(const Object& arg, const rak::socket_address* sa, Object& reply);
+  void                create_find_node_response(const DhtMessage& arg, DhtMessage& reply);
+  void                create_get_peers_response(const DhtMessage& arg, const rak::socket_address* sa, DhtMessage& reply);
+  void                create_announce_peer_response(const DhtMessage& arg, const rak::socket_address* sa, DhtMessage& reply);
 
   int                 add_transaction(DhtTransaction* t, int priority);
 
@@ -166,12 +172,17 @@ private:
 
   rak::priority_item  m_taskTimeout;
 
-  ThrottleNode        m_uploadThrottle;
-  ThrottleNode        m_downloadThrottle;
+  ThrottleNode        m_uploadNode;
+  ThrottleNode        m_downloadNode;
+
+  ThrottleList*       m_uploadThrottle;
+  ThrottleList*       m_downloadThrottle;
 
   unsigned int        m_queriesReceived;
   unsigned int        m_queriesSent;
   unsigned int        m_repliesReceived;
+  unsigned int        m_errorsReceived;
+  unsigned int        m_errorsCaught;
 
   bool                m_networkUp;
 };

@@ -49,6 +49,7 @@
 namespace torrent {
 
 class ConnectionList;
+class DownloadInfo;
 
 // Download is safe to copy and destory as it is just a pointer to an
 // internal class.
@@ -59,13 +60,17 @@ public:
 
   // Start and open flags can be stored in the same integer, same for
   // stop and close flags.
-  static const int start_no_create     = (1 << 0);
-  static const int start_keep_baseline = (1 << 1);
-  static const int start_skip_tracker  = (1 << 2);
+  static const int open_enable_fallocate = (1 << 0);
 
-  static const int stop_skip_tracker   = (1 << 0);
+  static const int start_no_create       = (1 << 1);
+  static const int start_keep_baseline   = (1 << 2);
+  static const int start_skip_tracker    = (1 << 3);
+
+  static const int stop_skip_tracker     = (1 << 0);
 
   Download(DownloadWrapper* d = NULL) : m_ptr(d) {}
+
+  const DownloadInfo* info() const;
 
   // Not active atm. Opens and prepares/closes the files.
   void                open(int flags = 0);
@@ -87,26 +92,10 @@ public:
   // Does not check if the download has been removed.
   bool                is_valid() const { return m_ptr; }
 
-  bool                is_open() const;
-  bool                is_active() const;
-
   bool                is_hash_checked() const;
   bool                is_hash_checking() const;
 
-  bool                is_private() const;
-  bool                is_pex_active() const;
-  bool                is_pex_enabled() const;
   void                set_pex_enabled(bool enabled);
-
-  // Returns "" if the object is not valid.
-  const std::string&  name() const;
-
-  const HashString&   info_hash() const;
-  const HashString&   info_hash_obfuscated() const;
-  const HashString&   local_id() const;
-
-  // Unix epoche, 0 == unknown.
-  uint32_t            creation_date() const;
 
   Object*             bencode();
   const Object*       bencode() const;
@@ -120,19 +109,6 @@ public:
 
   ConnectionList*       connection_list();
   const ConnectionList* connection_list() const;
-
-  // Remove the old non-const versions.
-  Rate*               down_rate();
-  const Rate*         down_rate() const;
-  Rate*               mutable_down_rate();
-
-  Rate*               up_rate();
-  const Rate*         up_rate() const;
-  Rate*               mutable_up_rate();
-
-  Rate*               skip_rate();
-  const Rate*         skip_rate() const;
-  Rate*               mutable_skip_rate();
 
   // Bytes completed.
   uint64_t            bytes_done() const;
@@ -182,6 +158,7 @@ public:
     CONNECTION_LEECH,
     CONNECTION_SEED,
     CONNECTION_INITIAL_SEED,
+    CONNECTION_METADATA,
   } ConnectionType;
 
   ConnectionType      connection_type() const;
@@ -192,33 +169,7 @@ public:
   // all the peer bitfields to see if we are still interested.
   void                update_priorities();
 
-  typedef sigc::slot0<void>                                          slot_void_type;
-  typedef sigc::slot1<void, const std::string&>                      slot_string_type;
-
-  typedef sigc::slot1<void, uint32_t>                                slot_chunk_type;
-  typedef sigc::slot3<void, const std::string&, const char*, size_t> slot_dump_type;
-
-  // signal_download_done is a delayed signal so it is safe to
-  // stop/close the torrent when received. The signal is only emitted
-  // when the torrent is active, so hash checking will not trigger it.
-  sigc::connection    signal_download_done(slot_void_type s);
-  sigc::connection    signal_hash_done(slot_void_type s);
-
-  sigc::connection    signal_tracker_succeded(slot_void_type s);
-  sigc::connection    signal_tracker_failed(slot_string_type s);
-  sigc::connection    signal_tracker_dump(slot_dump_type s);
-
-  sigc::connection    signal_chunk_passed(slot_chunk_type s);
-  sigc::connection    signal_chunk_failed(slot_chunk_type s);
-
-  // Various network log message signals.
-  sigc::connection    signal_network_log(slot_string_type s);
-
-  // Emits error messages if there are problems opening files for
-  // read/write when the download is active. The client should stop
-  // the download if it receive any of these as it will not be able to
-  // continue.
-  sigc::connection    signal_storage_error(slot_string_type s);
+  void                add_peer(const sockaddr* addr, int port);
 
   DownloadWrapper*    ptr() { return m_ptr; }
 

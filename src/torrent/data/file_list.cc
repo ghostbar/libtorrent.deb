@@ -106,6 +106,17 @@ FileList::is_valid_piece(const Piece& piece) const {
 }
 
 bool
+FileList::is_root_dir_created() const {
+  rak::file_stat fs;
+
+  if (!fs.update(m_rootDir))
+//     return rak::error_number::current() == rak::error_number::e_access;
+    return false;
+
+  return fs.is_directory();
+}
+
+bool
 FileList::is_multi_file() const {
   // Currently only check if we got just one file. In the future this
   // should be a bool, which will be set based on what flags are
@@ -454,6 +465,21 @@ FileList::open(int flags) {
   }
 
   m_isOpen = true;
+  m_frozenRootDir = m_rootDir;
+
+  // For meta-downloads, if the file exists, we have to assume that
+  // it is either 0 or 1 length or the correct size. If the size
+  // turns out wrong later, a storage_error will be thrown elsewhere
+  // to alert the user in this (unlikely) case.
+  //
+  // DEBUG: Make this depend on a flag...
+  if (size_bytes() < 2) {
+    rak::file_stat stat;
+
+    // This probably recurses into open() once, but that is harmless.
+    if (stat.update((*begin())->frozen_path()) && stat.size() > 1)
+      return reset_filesize(stat.size());
+  }
 }
 
 void
@@ -531,9 +557,7 @@ FileList::open_file(File* node, const Path& lastPath, int flags) {
     return false;
   }
 
-  return
-    node->prepare(MemoryChunk::prot_read | MemoryChunk::prot_write, (flags & open_no_create ? 0 : SocketFile::o_create)) ||
-    node->prepare(MemoryChunk::prot_read, 0);
+  return node->prepare(MemoryChunk::prot_read, 0);
 }
 
 MemoryChunk
@@ -649,6 +673,16 @@ FileList::update_completed() {
       if (m_bitfield.get(index))
         entryItr = inc_completed(entryItr, index);
   }
+}
+
+void
+FileList::reset_filesize(int64_t size) {
+  close();
+  m_chunkSize = size;
+  m_torrentSize = size;
+  (*begin())->set_size_bytes(size);
+  (*begin())->set_range(m_chunkSize);
+  open(open_no_create);
 }
 
 }

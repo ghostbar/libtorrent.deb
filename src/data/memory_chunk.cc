@@ -36,8 +36,6 @@
 
 #include "config.h"
 
-#include <algorithm>
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/mman.h>
@@ -105,7 +103,7 @@ MemoryChunk::incore(char* buf, uint32_t offset, uint32_t length) {
 
 #else // !USE_MINCORE
   // Pretend all pages are in memory.
-  memset(buf, 1, pages_touched(offset, length);
+  memset(buf, 1, pages_touched(offset, length));
 
 #endif
 }
@@ -148,15 +146,5 @@ MemoryChunk::sync(uint32_t offset, uint32_t length, int flags) {
   
   return msync(m_ptr + offset, length, flags) == 0;
 }    
-
-bool
-MemoryChunk::is_incore(uint32_t offset, uint32_t length) {
-  uint32_t size = pages_touched(offset, length);
-  char buf[size];
-  
-  incore(buf, offset, length);
-
-  return std::find(buf, buf + size, 0) == buf + size;
-}
 
 }

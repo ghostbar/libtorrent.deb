@@ -16,16 +16,21 @@ libsub_torrent_la_SOURCES = \
 	dht_manager.h \
 	download.cc \
 	download.h \
+	download_info.h \
 	error.cc \
 	error.h \
 	event.h \
 	exceptions.cc \
 	exceptions.h \
+	hash_string.cc \
 	hash_string.h \
 	http.cc \
 	http.h \
 	object.cc \
 	object.h \
+	object_raw_bencode.h \
+	object_static_map.cc \
+	object_static_map.h \
 	object_stream.cc \
 	object_stream.h \
 	path.cc \
@@ -41,6 +46,8 @@ libsub_torrent_la_SOURCES = \
 	rate.h \
 	resume.cc \
 	resume.h \
+	thread_base.cc \
+	thread_base.h \
 	throttle.cc \
 	throttle.h \
 	torrent.cc \
@@ -60,12 +67,15 @@ libtorrentinclude_HEADERS = \
 	connection_manager.h \
 	dht_manager.h \
 	download.h \
+	download_info.h \
 	error.h \
 	exceptions.h \
 	event.h \
 	hash_string.h \
 	http.h \
 	object.h \
+	object_raw_bencode.h \
+	object_static_map.h \
 	object_stream.h \
 	path.h \
 	poll.h \
@@ -74,6 +84,7 @@ libtorrentinclude_HEADERS = \
 	poll_select.h \
 	rate.h \
 	resume.h \
+	thread_base.h \
 	throttle.h \
 	torrent.h \
 	tracker.h \

@@ -47,6 +47,12 @@
 
 namespace torrent {
 
+FileManager::FileManager() :
+  m_maxOpenFiles(0),
+  m_filesOpenedCounter(0),
+  m_filesClosedCounter(0),
+  m_filesFailedCounter(0) {}
+
 FileManager::~FileManager() {
   if (!empty())
     throw internal_error("FileManager::~FileManager() called but empty() != true.");
@@ -54,6 +60,9 @@ FileManager::~FileManager() {
 
 void
 FileManager::set_max_open_files(size_type s) {
+  if (s < 4 || s > (1 << 16))
+    throw input_error("Max open files must be between 4 and 2^16.");
+
   m_maxOpenFiles = s;
 
   while (size() > m_maxOpenFiles)
@@ -73,8 +82,10 @@ FileManager::open(value_type file, int prot, int flags) {
 
   SocketFile fd;
 
-  if (!fd.open(file->frozen_path(), prot, flags))
+  if (!fd.open(file->frozen_path(), prot, flags)) {
+    m_filesFailedCounter++;
     return false;
+  }
 
   file->set_protection(prot);
   file->set_file_descriptor(fd.fd());
@@ -82,6 +93,7 @@ FileManager::open(value_type file, int prot, int flags) {
 
   // Consider storing the position of the file here.
 
+  m_filesOpenedCounter++;
   return true;
 }
 
@@ -102,6 +114,8 @@ FileManager::close(value_type file) {
 
   *itr = back();
   base_type::pop_back();
+
+  m_filesClosedCounter++;
 }
 
 struct FileManagerActivity {

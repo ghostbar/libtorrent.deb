@@ -43,12 +43,12 @@
 
 #include "globals.h"
 
-#include "download_info.h"
 #include "delegator.h"
 
 #include "data/chunk_handle.h"
 #include "download/available_list.h"
 #include "net/data_buffer.h"
+#include "torrent/download_info.h"
 #include "torrent/data/file_list.h"
 #include "torrent/peer/peer_list.h"
 
@@ -104,6 +104,8 @@ public:
   FileList*           file_list()                                { return &m_fileList; }
   PeerList*           peer_list()                                { return &m_peerList; }
 
+  std::pair<ThrottleList*, ThrottleList*> throttles(const sockaddr* sa);
+
   ThrottleList*       upload_throttle()                          { return m_uploadThrottle; }
   void                set_upload_throttle(ThrottleList* t)       { m_uploadThrottle = t; }
 
@@ -113,6 +115,8 @@ public:
   DataBuffer          get_ut_pex(bool initial)                   { return (initial ? m_ut_pex_initial : m_ut_pex_delta).clone(); }
 
   bool                want_pex_msg()                             { return m_info->is_pex_active() && m_peerList.available_list()->want_more(); }; 
+
+  void                set_metadata_size(size_t s);
 
   // Carefull with these.
   void                setup_delegator();
@@ -129,6 +133,8 @@ public:
   void                slot_count_handshakes(SlotCountHandshakes s) { m_slotCountHandshakes = s; }
   void                slot_hash_check_add(SlotHashCheckAdd s)      { m_slotHashCheckAdd = s; }
 
+  void                add_peer(const rak::socket_address& sa);
+
   void                receive_connect_peers();
   void                receive_chunk_done(unsigned int index);
   void                receive_corrupt_chunk(PeerInfo* peerInfo);
@@ -141,6 +147,9 @@ public:
   void                do_peer_exchange();
 
   void                update_endgame();
+
+  rak::priority_item& delay_disconnect_peers() { return m_delayDisconnectPeers; }
+  rak::priority_item& delay_download_done() { return m_delayDownloadDone; }
 
 private:
   // Disable copy ctor and assignment.
@@ -183,6 +192,8 @@ private:
   SlotCountHandshakes m_slotCountHandshakes;
   SlotHashCheckAdd    m_slotHashCheckAdd;
 
+  rak::priority_item  m_delayDownloadDone;
+  rak::priority_item  m_delayDisconnectPeers;
   rak::priority_item  m_taskTrackerRequest;
 };
 

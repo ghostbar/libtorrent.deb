@@ -59,11 +59,15 @@ public:
   mapped_type         mapped() const                        { return m_mapped; }
 
   MemoryChunk&        chunk()                               { return m_chunk; }
+  const MemoryChunk&  chunk() const                         { return m_chunk; }
 
   uint32_t            size() const                          { return m_chunk.size(); }
   uint32_t            position() const                      { return m_position; }
 
-  uint32_t            incore_length(uint32_t pos);
+  uint32_t            remaining_from(uint32_t pos) const    { return size() - (pos - m_position); }
+
+  bool                is_incore(uint32_t pos, uint32_t length = ~uint32_t());
+  uint32_t            incore_length(uint32_t pos, uint32_t length = ~uint32_t());
 
 private:
   mapped_type         m_mapped;

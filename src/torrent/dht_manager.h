@@ -62,6 +62,8 @@ public:
     unsigned int       queries_received;
     unsigned int       queries_sent;
     unsigned int       replies_received;
+    unsigned int       errors_received;
+    unsigned int       errors_caught;
 
     // DHT node info.
     unsigned int       num_nodes;
@@ -105,7 +107,6 @@ public:
   statistics_type     get_statistics() const;
   void                reset_statistics();
 
-  // Not implemented yet.
   void                set_upload_throttle(Throttle* t);
   void                set_download_throttle(Throttle* t);
 

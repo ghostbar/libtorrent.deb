@@ -1,4 +1,4 @@
-SUBDIRS = src
+SUBDIRS = src test
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libtorrent.pc
@@ -13,6 +13,7 @@ EXTRA_DIST= \
 	doc/torrent.xml \
 	rak/address_info.h \
         rak/algorithm.h \
+	rak/allocators.h \
 	rak/error_number.h \
 	rak/file_stat.h \
 	rak/fs_stat.h \

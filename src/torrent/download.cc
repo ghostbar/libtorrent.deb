@@ -52,9 +52,9 @@
 #include "download/download_wrapper.h"
 #include "protocol/peer_connection_base.h"
 #include "protocol/peer_factory.h"
-#include "download/download_info.h"
 #include "peer/peer_info.h"
 #include "tracker/tracker_manager.h"
+#include "torrent/download_info.h"
 #include "torrent/data/file.h"
 #include "torrent/peer/connection_list.h"
 
@@ -65,6 +65,9 @@
 #include "tracker_list.h"
 
 namespace torrent {
+
+const DownloadInfo*
+Download::info() const { return m_ptr->info(); }
 
 void
 Download::open(int flags) {
@@ -80,8 +83,13 @@ Download::open(int flags) {
   // should be allowed to pass a flag that will keep the old settings,
   // although loading resume data should really handle everything
   // properly.
+  int fileFlags = File::flag_create_queued | File::flag_resize_queued;
+
+  if (flags & open_enable_fallocate)
+    fileFlags |= File::flag_fallocate;
+
   for (FileList::iterator itr = m_ptr->main()->file_list()->begin(), last = m_ptr->main()->file_list()->end(); itr != last; itr++)
-    (*itr)->set_flags(File::flag_create_queued | File::flag_resize_queued);
+    (*itr)->set_flags(fileFlags);
 }
 
 void
@@ -104,6 +112,10 @@ Download::start(int flags) {
     return;
 
 //   file_list()->open(flags);
+
+  // If the FileList::open_no_create flag was not set, our new
+  // behavior is to create all zero-length files with
+  // flag_queued_create set.
   file_list()->open(flags & ~FileList::open_no_create);
 
   if (m_ptr->connection_type() == CONNECTION_INITIAL_SEED) {
@@ -118,7 +130,7 @@ Download::start(int flags) {
   // so that broken trackers get the right uploaded ratio.
   if (!(flags & start_keep_baseline)) {
     m_ptr->info()->set_uploaded_baseline(m_ptr->info()->up_rate()->total());
-    m_ptr->info()->set_completed_baseline(m_ptr->info()->slot_completed()());
+    m_ptr->info()->set_completed_baseline(m_ptr->main()->file_list()->completed_bytes());
   }
 
   if (flags & start_skip_tracker)
@@ -181,16 +193,6 @@ Download::hash_stop() {
 }
 
 bool
-Download::is_open() const {
-  return m_ptr->info()->is_open();
-}
-
-bool
-Download::is_active() const {
-  return m_ptr->info()->is_active();
-}
-
-bool
 Download::is_hash_checked() const {
   return m_ptr->hash_checker()->is_checked();
 }
@@ -200,55 +202,9 @@ Download::is_hash_checking() const {
   return m_ptr->hash_checker()->is_checking();
 }
 
-bool
-Download::is_private() const {
-  return m_ptr->info()->is_private();
-}
-
-bool
-Download::is_pex_active() const {
-  return m_ptr->info()->is_pex_active();
-}
-
-bool
-Download::is_pex_enabled() const {
-  return m_ptr->info()->is_pex_enabled();
-}
-
 void
 Download::set_pex_enabled(bool enabled) {
-  m_ptr->info()->set_pex_enabled(enabled);
-}
-
-const std::string&
-Download::name() const {
-  if (m_ptr == NULL)
-    throw internal_error("Download::name() m_ptr == NULL.");
-
-  return m_ptr->info()->name();
-}
-
-const HashString&
-Download::info_hash() const {
-  return m_ptr->info()->hash();
-}
-
-const HashString&
-Download::info_hash_obfuscated() const {
-  return m_ptr->info()->hash_obfuscated();
-}
-
-const HashString&
-Download::local_id() const {
-  return m_ptr->info()->local_id();
-}
-
-uint32_t
-Download::creation_date() const {
-  if (m_ptr->bencode()->has_key_value("creation date"))
-    return m_ptr->bencode()->get_key_value("creation date");
-  else
-    return 0;
+  m_ptr->info()->change_flags(DownloadInfo::flag_pex_enabled, enabled);
 }
 
 Object*
@@ -294,51 +250,6 @@ Download::connection_list() {
 const ConnectionList*
 Download::connection_list() const {
   return m_ptr->main()->connection_list();
-}
-
-Rate*
-Download::down_rate() {
-  return m_ptr->info()->down_rate();
-}
-
-const Rate*
-Download::down_rate() const {
-  return m_ptr->info()->down_rate();
-}
-
-Rate*
-Download::mutable_down_rate() {
-  return m_ptr->info()->down_rate();
-}
-
-Rate*
-Download::up_rate() {
-  return m_ptr->info()->up_rate();
-}
-
-const Rate*
-Download::up_rate() const {
-  return m_ptr->info()->up_rate();
-}
-
-Rate*
-Download::mutable_up_rate() {
-  return m_ptr->info()->up_rate();
-}
-
-Rate*
-Download::skip_rate() {
-  return m_ptr->info()->skip_rate();
-}
-
-const Rate*
-Download::skip_rate() const {
-  return m_ptr->info()->skip_rate();
-}
-
-Rate*
-Download::mutable_skip_rate() {
-  return m_ptr->info()->skip_rate();
 }
 
 uint64_t
@@ -463,6 +374,9 @@ Download::accepting_new_peers() const {
 
 uint32_t
 Download::uploads_max() const {
+  if (m_ptr->main()->upload_choke_manager()->max_unchoked() == ChokeManager::unlimited)
+    return 0;
+
   return m_ptr->main()->upload_choke_manager()->max_unchoked();
 }
 
@@ -499,6 +413,11 @@ Download::connection_type() const {
 
 void
 Download::set_connection_type(ConnectionType t) {
+  if (m_ptr->info()->is_meta_download()) {
+    m_ptr->main()->connection_list()->slot_new_connection(&createPeerConnectionMetadata);
+    return;
+  }
+
   switch (t) {
   case CONNECTION_LEECH:
     m_ptr->main()->connection_list()->slot_new_connection(&createPeerConnectionDefault);
@@ -507,7 +426,7 @@ Download::set_connection_type(ConnectionType t) {
     m_ptr->main()->connection_list()->slot_new_connection(&createPeerConnectionSeed);
     break;
   case CONNECTION_INITIAL_SEED:
-    if (is_active() && m_ptr->main()->initial_seeding() == NULL)
+    if (info()->is_active() && m_ptr->main()->initial_seeding() == NULL)
       throw input_error("Can't switch to initial seeding: download is active.");
     m_ptr->main()->connection_list()->slot_new_connection(&createPeerConnectionInitialSeed);
     break;
@@ -523,49 +442,14 @@ Download::update_priorities() {
   m_ptr->receive_update_priorities();
 }
 
-sigc::connection
-Download::signal_download_done(Download::slot_void_type s) {
-  return m_ptr->signal_download_done().connect(s);
-}
+void
+Download::add_peer(const sockaddr* sa, int port) {
+  if (m_ptr->info()->is_private())
+    return;
 
-sigc::connection
-Download::signal_hash_done(Download::slot_void_type s) {
-  return m_ptr->signal_initial_hash().connect(s);
-}
-
-sigc::connection
-Download::signal_tracker_succeded(Download::slot_void_type s) {
-  return m_ptr->signal_tracker_success().connect(s);
-}
-
-sigc::connection
-Download::signal_tracker_failed(Download::slot_string_type s) {
-  return m_ptr->signal_tracker_failed().connect(s);
-}
-
-sigc::connection
-Download::signal_tracker_dump(Download::slot_dump_type s) {
-  return m_ptr->info()->signal_tracker_dump().connect(s);
-}
-
-sigc::connection
-Download::signal_chunk_passed(Download::slot_chunk_type s) {
-  return m_ptr->signal_chunk_passed().connect(s);
-}
-
-sigc::connection
-Download::signal_chunk_failed(Download::slot_chunk_type s) {
-  return m_ptr->signal_chunk_failed().connect(s);
-}
-
-sigc::connection
-Download::signal_network_log(slot_string_type s) {
-  return m_ptr->info()->signal_network_log().connect(s);
-}
-
-sigc::connection
-Download::signal_storage_error(slot_string_type s) {
-  return m_ptr->info()->signal_storage_error().connect(s);
+  rak::socket_address sa_port = *rak::socket_address::cast_from(sa);
+  sa_port.set_port(port);
+  m_ptr->main()->add_peer(sa_port);
 }
 
 }

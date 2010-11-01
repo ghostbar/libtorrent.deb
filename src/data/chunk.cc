@@ -112,23 +112,50 @@ Chunk::at_memory(uint32_t offset, iterator part) {
   return data_type(part->chunk().begin() + offset, part->size() - offset);
 }
 
-uint32_t
-Chunk::incore_length(uint32_t pos) {
-  uint32_t lengthIncore = 0;
+bool
+Chunk::is_incore(uint32_t pos, uint32_t length) {
   iterator itr = at_position(pos);
 
   if (itr == end())
     throw internal_error("Chunk::incore_length(...) at end()");
 
-  do {
-    uint32_t length = itr->incore_length(pos);
+  uint32_t last = pos + std::min(length, chunk_size() - pos);
 
-    pos += length;
-    lengthIncore += length;
+  while (itr->is_incore(pos, last - pos)) {
+    if (++itr == end() || itr->position() >= last)
+      return true;
+
+    pos = itr->position();
+  }
+
+  return false;
+}
+
+// TODO: Buggy, hitting internal_error. Likely need to fix
+// ChunkPart::incore_length's length align.
+uint32_t
+Chunk::incore_length(uint32_t pos, uint32_t length) {
+  uint32_t result = 0;
+  iterator itr = at_position(pos);
+
+  if (itr == end())
+    throw internal_error("Chunk::incore_length(...) at end()");
+
+  length = std::min(length, chunk_size() - pos);
+
+  do {
+    uint32_t incore_len = itr->incore_length(pos, length);
+
+    if (incore_len > length)
+      throw internal_error("Chunk::incore_length(...) incore_len > length.");
+
+    pos += incore_len;
+    length -= incore_len;
+    result += incore_len;
 
   } while (pos == itr->position() + itr->size() && ++itr != end());
 
-  return lengthIncore;
+  return result;
 }
 
 bool
@@ -155,6 +182,8 @@ Chunk::preload(uint32_t position, uint32_t length, bool useAdvise) {
 
   do {
     data = itr.data();
+
+    // Don't do preloading for zero-length chunks.
 
     if (useAdvise) {
       itr.memory_chunk()->advise(itr.memory_chunk_first(), data.second, MemoryChunk::advice_willneed);
@@ -188,8 +217,7 @@ Chunk::to_buffer(void* buffer, uint32_t position, uint32_t length) {
     std::memcpy(buffer, data.first, data.second);
 
     buffer = static_cast<char*>(buffer) + data.second;
-
-  } while (itr.used(data.second));
+  } while (itr.next());
   
   return true;
 }
@@ -212,8 +240,7 @@ Chunk::from_buffer(const void* buffer, uint32_t position, uint32_t length) {
     std::memcpy(data.first, buffer, data.second);
 
     buffer = static_cast<const char*>(buffer) + data.second;
-
-  } while (itr.used(data.second));
+  } while (itr.next());
   
   return true;
 }
@@ -238,8 +265,7 @@ Chunk::compare_buffer(const void* buffer, uint32_t position, uint32_t length) {
       return false;
 
     buffer = static_cast<const char*>(buffer) + data.second;
-
-  } while (itr.used(data.second));
+  } while (itr.next());
   
   return true;
 }

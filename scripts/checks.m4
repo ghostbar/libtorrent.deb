@@ -78,7 +78,8 @@ AC_DEFUN([TORRENT_CHECK_KQUEUE], [
   AC_MSG_CHECKING(for kqueue support)
 
   AC_LINK_IFELSE(
-    [[#include <sys/event.h>
+    [[#include <sys/time.h>  /* Because OpenBSD's sys/event.h fails to compile otherwise. Yeah... */
+      #include <sys/event.h>
       int main() {
         int fd = kqueue();
         return 0;
@@ -152,6 +153,22 @@ AC_DEFUN([TORRENT_WITHOUT_VARIABLE_FDSET], [
       fi
     ], [
       AC_DEFINE(USE_VARIABLE_FDSET, 1, defined when we allow the use of fd_set's of any size)
+    ])
+])
+
+
+AC_DEFUN([TORRENT_CHECK_FALLOCATE], [
+  AC_MSG_CHECKING(for fallocate)
+
+  AC_TRY_LINK([#include <fcntl.h>
+               #include <linux/falloc.h>
+              ],[ fallocate(0, FALLOC_FL_KEEP_SIZE, 0, 0); return 0;
+              ],
+    [
+      AC_DEFINE(HAVE_FALLOCATE, 1, Linux's fallocate supported.)
+      AC_MSG_RESULT(yes)
+    ], [
+      AC_MSG_RESULT(no)
     ])
 ])
 

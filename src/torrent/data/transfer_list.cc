@@ -40,6 +40,7 @@
 #include <functional>
 #include <set>
 #include <rak/functional.h>
+#include <rak/timer.h>
 
 #include "data/chunk.h"
 #include "peer/peer_info.h"
@@ -58,7 +59,9 @@ TransferList::TransferList() :
   m_slotCanceled(slot_canceled_type(slot_canceled_op(NULL), NULL)),
   m_slotCompleted(slot_completed_type(slot_completed_op(NULL), NULL)),
   m_slotQueued(slot_queued_type(slot_queued_op(NULL), NULL)),
-  m_slotCorrupt(slot_corrupt_type(slot_corrupt_op(NULL), NULL)) { }
+  m_slotCorrupt(slot_corrupt_type(slot_corrupt_op(NULL), NULL)),
+  m_succeededCount(0),
+  m_failedCount(0) { }
 
 TransferList::iterator
 TransferList::find(uint32_t index) {
@@ -113,15 +116,38 @@ TransferList::finished(BlockTransfer* transfer) {
 }
 
 void
-TransferList::hash_succeded(uint32_t index) {
+TransferList::hash_succeeded(uint32_t index, Chunk* chunk) {
   iterator blockListItr = find(index);
 
-  if ((Block::size_type)std::count_if((*blockListItr)->begin(), (*blockListItr)->end(), std::mem_fun_ref(&Block::is_finished)) != (*blockListItr)->size())
-    throw internal_error("TransferList::hash_succeded(...) Finished blocks does not match size.");
+  if ((Block::size_type)std::count_if((*blockListItr)->begin(), (*blockListItr)->end(),
+                                      std::mem_fun_ref(&Block::is_finished)) != (*blockListItr)->size())
+    throw internal_error("TransferList::hash_succeeded(...) Finished blocks does not match size.");
+
+  // The chunk should also be marked here or by the caller so that it
+  // gets priority for syncing back to disk.
 
   if ((*blockListItr)->failed() != 0)
-    mark_failed_peers(*blockListItr);
+    mark_failed_peers(*blockListItr, chunk);
 
+  // Add to a list of finished chunks indices with timestamps. This is
+  // mainly used for torrent resume data on which chunks need to be
+  // rehashed on crashes.
+  //
+  // We assume the chunk gets sync'ed within 10 minutes, so minimum
+  // retention time of 30 minutes should be enough. The list only gets
+  // pruned every 60 minutes, so any timer that reads values once
+  // every 30 minutes is guaranteed to get them all as long as it is
+  // ordered properly.
+  m_completedList.push_back(std::make_pair(rak::timer::current().usec(), index));
+  
+  if (rak::timer(m_completedList.front().first) + rak::timer::from_minutes(60) < rak::timer::current()) {
+    completed_list_type::iterator itr = std::find_if(m_completedList.begin(), m_completedList.end(),
+                                                     rak::less_equal(rak::timer::current() - rak::timer::from_minutes(30),
+                                                                     rak::mem_ref(&completed_list_type::value_type::first)));
+    m_completedList.erase(m_completedList.begin(), itr);
+  }
+
+  m_succeededCount++;
   erase(blockListItr);
 }
 
@@ -145,6 +171,8 @@ TransferList::hash_failed(uint32_t index, Chunk* chunk) {
 
   if ((Block::size_type)std::count_if((*blockListItr)->begin(), (*blockListItr)->end(), std::mem_fun_ref(&Block::is_finished)) != (*blockListItr)->size())
     throw internal_error("TransferList::hash_failed(...) Finished blocks does not match size.");
+
+  m_failedCount++;
 
   // Could propably also check promoted against size of the block
   // list.
@@ -198,6 +226,7 @@ TransferList::update_failed(BlockList* blockList, Chunk* chunk) {
       chunk->to_buffer(buffer, itr->piece().offset(), itr->piece().length());
 
       itr->failed_list()->push_back(BlockFailed::value_type(buffer, 1));
+      failedItr = itr->failed_list()->end() - 1;
 
       // Count how many new data sets?
 
@@ -221,13 +250,19 @@ TransferList::update_failed(BlockList* blockList, Chunk* chunk) {
 }
 
 void
-TransferList::mark_failed_peers(BlockList* blockList) {
+TransferList::mark_failed_peers(BlockList* blockList, Chunk* chunk) {
   std::set<PeerInfo*> badPeers;
 
-  for (BlockList::iterator itr = blockList->begin(), last = blockList->end(); itr != last; ++itr)
+  for (BlockList::iterator itr = blockList->begin(), last = blockList->end(); itr != last; ++itr) {
+    // This chunk data is good, set it as current and
+    // everyone who sent something else is a bad peer.
+    itr->failed_list()->set_current(std::find_if(itr->failed_list()->begin(), itr->failed_list()->end(),
+                                                 transfer_list_compare_data(chunk, itr->piece())));
+
     for (Block::transfer_list_type::const_iterator itr2 = itr->transfers()->begin(), last2 = itr->transfers()->end(); itr2 != last2; ++itr2)
-      if ((*itr2)->failed_index() != itr->failed_list()->current())
+      if ((*itr2)->failed_index() != itr->failed_list()->current() && (*itr2)->failed_index() != ~uint32_t())
         badPeers.insert((*itr2)->peer_info());
+  }
 
   std::for_each(badPeers.begin(), badPeers.end(), m_slotCorrupt);
 }

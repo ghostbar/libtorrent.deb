@@ -51,6 +51,7 @@ public:
 
   using base_type::iterator;
   using base_type::reverse_iterator;
+  using base_type::const_iterator;
   using base_type::empty;
   using base_type::reserve;
 
@@ -75,13 +76,16 @@ public:
 
   void                push_back(value_type::mapped_type mapped, const MemoryChunk& c);
 
+  // The at_position functions only returns non-zero length iterators
+  // or end.
   iterator            at_position(uint32_t pos);
   iterator            at_position(uint32_t pos, iterator itr);
 
   data_type           at_memory(uint32_t offset, iterator part);
 
   // Check how much of the chunk is incore from pos.
-  uint32_t            incore_length(uint32_t pos);
+  bool                is_incore(uint32_t pos, uint32_t length = ~uint32_t());
+  uint32_t            incore_length(uint32_t pos, uint32_t length = ~uint32_t());
 
   bool                sync(int flags);
 

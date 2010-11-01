@@ -36,10 +36,10 @@
 
 #include "config.h"
 
-#include "download/download_info.h"
 #include "download/download_main.h"
 #include "net/throttle_list.h"
 #include "torrent/dht_manager.h"
+#include "torrent/download_info.h"
 #include "torrent/exceptions.h"
 #include "torrent/error.h"
 #include "torrent/poll.h"
@@ -133,14 +133,13 @@ void
 Handshake::initialize_outgoing(const rak::socket_address& sa, DownloadMain* d, PeerInfo* peerInfo) {
   m_download = d;
 
-  m_uploadThrottle = d->upload_throttle();
-  m_downloadThrottle = d->download_throttle();
-
   m_peerInfo = peerInfo;
   m_peerInfo->set_flags(PeerInfo::flag_handshake);
 
   m_incoming = false;
   m_address = sa;
+
+  std::make_pair(m_uploadThrottle, m_downloadThrottle) = m_download->throttles(m_address.c_sockaddr());
 
   m_state = CONNECTING;
 
@@ -347,8 +346,7 @@ Handshake::read_encryption_skey() {
 
   validate_download();
 
-  m_uploadThrottle = m_download->upload_throttle();
-  m_downloadThrottle = m_download->download_throttle();
+  std::make_pair(m_uploadThrottle, m_downloadThrottle) = m_download->throttles(m_address.c_sockaddr());
 
   m_encryption.initialize_encrypt(m_download->info()->hash().c_str(), m_incoming);
   m_encryption.initialize_decrypt(m_download->info()->hash().c_str(), m_incoming);
@@ -495,8 +493,7 @@ Handshake::read_info() {
 
     validate_download();
 
-    m_uploadThrottle = m_download->upload_throttle();
-    m_downloadThrottle = m_download->download_throttle();
+    std::make_pair(m_uploadThrottle, m_downloadThrottle) = m_download->throttles(m_address.c_sockaddr());
 
     prepare_handshake();
 
@@ -604,6 +601,33 @@ Handshake::read_extension() {
     throw internal_error("Could not read extension handshake even though it should be in the read buffer.");
 
   m_extensions->read_done();
+  m_readBuffer.consume(length);
+  return true;
+}
+
+bool
+Handshake::read_port() {
+  if (m_readBuffer.peek_32() > m_readBuffer.reserved())
+    throw handshake_error(ConnectionManager::handshake_failed, e_handshake_invalid_value);
+
+  int32_t need = m_readBuffer.peek_32() + 4 - m_readBuffer.remaining();
+
+  if (need + 5 > m_readBuffer.reserved_left()) {
+    m_readBuffer.move_unused();
+
+    if (need + 5 > m_readBuffer.reserved_left())
+      throw handshake_error(ConnectionManager::handshake_failed, e_handshake_invalid_value);
+  }
+
+  if (!fill_read_buffer(m_readBuffer.peek_32() + 4))
+    return false;
+
+  uint32_t length = m_readBuffer.read_32() - 1;
+  m_readBuffer.read_8();
+
+  if (length == 2)
+    manager->dht_manager()->add_node(m_address.c_sockaddr(), m_readBuffer.peek_16());
+
   m_readBuffer.consume(length);
   return true;
 }
@@ -726,6 +750,17 @@ restart:
 
     case READ_MESSAGE:
     case POST_HANDSHAKE:
+      // For meta-downloads, we aren't interested in the bitfield or
+      // extension messages here, PCMetadata handles all that. The
+      // bitfield only refers to the single-chunk meta-data, so fake that.
+      if (m_download->info()->is_meta_download()) {
+        m_bitfield.set_size_bits(1);
+        m_bitfield.allocate();
+        m_bitfield.set(0);
+        read_done();
+        break;
+      }
+
       fill_read_buffer(5);
 
       // Received a keep-alive message which means we won't be
@@ -767,6 +802,12 @@ restart:
         m_readPos = 0;
         m_state = READ_EXT;
 
+      } else if (m_readBuffer.peek_8_at(4) == protocol_port) {
+        // Some peers seem to send the port message before handshake,
+        // so handle it here.
+        m_readPos = 0;
+        m_state = READ_PORT;
+
       } else {
         read_done();
         break;
@@ -774,10 +815,12 @@ restart:
 
     case READ_BITFIELD:
     case READ_EXT:
+    case READ_PORT:
       // Gather the different command types into the same case group
       // so that we don't need 'goto restart' above.
       if ((m_state == READ_BITFIELD && !read_bitfield()) ||
-          (m_state == READ_EXT && !read_extension()))
+          (m_state == READ_EXT && !read_extension()) ||
+          (m_state == READ_PORT && !read_port()))
         break;
 
       m_state = READ_MESSAGE;
@@ -926,7 +969,7 @@ Handshake::prepare_proxy_connect() {
   int advance = snprintf((char*)m_writeBuffer.position(), m_writeBuffer.reserved_left(),
                          "CONNECT %s:%hu HTTP/1.0\r\n\r\n", buf, m_address.port());
 
-  if (advance == -1)
+  if (advance == -1 || advance > m_writeBuffer.reserved_left())
     throw internal_error("Handshake::prepare_proxy_connect() snprintf failed.");
 
   m_writeBuffer.move_end(advance);
@@ -1016,12 +1059,19 @@ Handshake::prepare_peer_info() {
     if (m_peerInfo == NULL)
       throw handshake_error(ConnectionManager::handshake_failed, e_handshake_network_error);
 
+    if (m_peerInfo->failed_counter() > m_manager->max_failed)
+      throw handshake_error(ConnectionManager::handshake_dropped, e_handshake_toomanyfailed);
+
     m_peerInfo->set_flags(PeerInfo::flag_handshake);
   }
 
   std::memcpy(m_peerInfo->set_options(), m_options, 8);
   m_peerInfo->mutable_id().assign((const char*)m_readBuffer.position());
   m_readBuffer.consume(20);
+
+  // For meta downloads, we require support of the extension protocol.
+  if (m_download->info()->is_meta_download() && !m_peerInfo->supports_extensions())
+    throw handshake_error(ConnectionManager::handshake_dropped, e_handshake_unwanted_connection);
 }
 
 void

@@ -37,9 +37,11 @@
 #include "config.h"
 
 #include <sstream>
+#include <cstdio>
 
 #include "dht/dht_router.h"
 #include "torrent/connection_manager.h"
+#include "torrent/download_info.h"
 #include "torrent/dht_manager.h"
 #include "torrent/exceptions.h"
 #include "torrent/tracker_list.h"
@@ -114,13 +116,11 @@ TrackerDht::type() const {
 }
 
 void
-TrackerDht::receive_peers(const Object& peer_list) {
+TrackerDht::receive_peers(raw_list peers) {
   if (!is_busy())
     throw internal_error("TrackerDht::receive_peers called while not busy.");
 
-  Object::list_type peers = peer_list.as_list();
-  for (Object::list_type::const_iterator itr = peers.begin(); itr != peers.end(); ++itr)
-    m_peers.parse_address_compact(itr->as_string());
+  m_peers.parse_address_bencode(peers);
 }
 
 void

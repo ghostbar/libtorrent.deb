@@ -41,9 +41,9 @@
 #include <rak/functional.h>
 #include <rak/string_manip.h>
 
-#include "download/download_info.h"
 #include "net/address_list.h"
 #include "torrent/connection_manager.h"
+#include "torrent/download_info.h"
 #include "torrent/exceptions.h"
 #include "torrent/http.h"
 #include "torrent/object_stream.h"
@@ -121,7 +121,7 @@ TrackerHttp::send_state(int state) {
   if (info->is_compact())
     s << "&compact=1";
 
-  if (m_parent->numwant() >= 0)
+  if (m_parent->numwant() >= 0 && state != DownloadInfo::STOPPED)
     s << "&numwant=" << m_parent->numwant();
 
   if (manager->connection_manager()->listen_port())

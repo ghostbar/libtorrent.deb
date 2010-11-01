@@ -66,7 +66,7 @@ public:
   static const uint32_t enc_pad_size         = 512;
   static const uint32_t enc_pad_read_size    = 96 + enc_pad_size + 20;
 
-  static const uint32_t buffer_size = enc_pad_read_size + 20 + enc_negotiation_size + enc_pad_size + 2 + handshake_size;
+  static const uint32_t buffer_size = enc_pad_read_size + 20 + enc_negotiation_size + enc_pad_size + 2 + handshake_size + 5;
 
   typedef ProtocolBuffer<buffer_size> Buffer;
 
@@ -89,7 +89,8 @@ public:
     READ_PEER,
     READ_MESSAGE,
     READ_BITFIELD,
-    READ_EXT
+    READ_EXT,
+    READ_PORT
   } State;
 
   Handshake(SocketFd fd, HandshakeManager* m, int encryption_options);
@@ -150,6 +151,7 @@ protected:
   bool                read_peer();
   bool                read_bitfield();
   bool                read_extension();
+  bool                read_port();
 
   void                prepare_proxy_connect();
   void                prepare_key_plus_pad();

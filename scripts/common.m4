@@ -86,8 +86,9 @@ AC_DEFUN([TORRENT_ENABLE_ARCH], [
         AC_MSG_RESULT($enableval)
 
         for i in `IFS=,; echo $enableval`; do
-          CXXFLAGS="$CXXFLAGS -arch $i"
-          LDFLAGS="$LDFLAGS -arch $i"
+          CFLAGS="$CFLAGS -march=$i"
+          CXXFLAGS="$CXXFLAGS -march=$i"
+          LDFLAGS="$LDFLAGS -march=$i"
         done
       fi
     ])
@@ -177,6 +178,31 @@ AC_DEFUN([TORRENT_CHECK_MADVISE], [
       AC_DEFINE(USE_MADVISE, 1, Use madvise)
     ], [
       AC_MSG_RESULT(no)
+  ])
+])
+
+AC_DEFUN([TORRENT_CHECK_CACHELINE], [
+  AC_MSG_CHECKING(for cacheline)
+
+  AC_COMPILE_IFELSE(
+    [[#include <stdlib.h>
+          #include <linux/cache.h>
+          void* vptr __cacheline_aligned;
+          void f() { posix_memalign(&vptr, SMP_CACHE_BYTES, 42); }
+    ]],
+    [
+      AC_MSG_RESULT(found builtin)
+dnl      AC_DEFINE(LT_SMP_CACHE_BYTES, SMP_CACHE_BYTES, Largest L1 cache size we know of, should work on all archs.)
+dnl      AC_DEFINE(lt_cacheline_aligned, __cacheline_aligned, LibTorrent defined cacheline aligned.)
+
+dnl   Need to fix this so that it uses the stuff defined by the system.
+
+      AC_DEFINE(LT_SMP_CACHE_BYTES, 128, Largest L1 cache size we know of, should work on all archs.)
+      AC_DEFINE(lt_cacheline_aligned, __attribute__((__aligned__(LT_SMP_CACHE_BYTES))), LibTorrent defined cacheline aligned.)
+    ], [
+      AC_MSG_RESULT(using default 128 bytes)
+      AC_DEFINE(LT_SMP_CACHE_BYTES, 128, Largest L1 cache size we know of, should work on all archs.)
+      AC_DEFINE(lt_cacheline_aligned, __attribute__((__aligned__(LT_SMP_CACHE_BYTES))), LibTorrent defined cacheline aligned.)
   ])
 ])
 

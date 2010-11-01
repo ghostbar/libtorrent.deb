@@ -42,16 +42,18 @@
 #include <sys/time.h>
 
 #include "net/socket_set.h"
+#include "rak/allocators.h"
 
 #include "event.h"
 #include "exceptions.h"
 #include "poll_select.h"
+#include "thread_base.h"
 
 namespace torrent {
 
 template <typename _Operation>
 struct poll_check_t {
-  poll_check_t(fd_set* s, _Operation op) : m_set(s), m_op(op) {}
+  poll_check_t(Poll* p, fd_set* s, _Operation op) : m_poll(p), m_set(s), m_op(op) {}
 
   void operator () (Event* s) {
     // This check is nessesary as other events may remove a socket
@@ -63,18 +65,26 @@ struct poll_check_t {
     if (s->file_descriptor() < 0)
       throw internal_error("poll_check: s->fd < 0");
 
-    if (FD_ISSET(s->file_descriptor(), m_set))
+    if (FD_ISSET(s->file_descriptor(), m_set)) {
       m_op(s);
+
+      // We waive the global lock after an event has been processed in
+      // order to ensure that 's' doesn't get removed before the op is
+      // called.
+      if ((m_poll->flags() & Poll::flag_waive_global_lock) && ThreadBase::global_queue_size() != 0)
+        ThreadBase::waive_global_lock();
+    }
   }
 
+  Poll*      m_poll;
   fd_set*    m_set;
   _Operation m_op;
 };
 
 template <typename _Operation>
 inline poll_check_t<_Operation>
-poll_check(fd_set* s, _Operation op) {
-  return poll_check_t<_Operation>(s, op);
+poll_check(Poll* p, fd_set* s, _Operation op) {
+  return poll_check_t<_Operation>(p, s, op);
 }
 
 struct poll_mark {
@@ -102,11 +112,24 @@ PollSelect::create(int maxOpenSockets) {
   if (maxOpenSockets <= 0)
     throw internal_error("PollSelect::set_open_max(...) received an invalid value");
 
-  PollSelect* p = new PollSelect;
+  // Just a temp hack, make some special template function for this...
+  //
+  // Also consider how portable this is for specialized C++
+  // allocators.
+  struct block_type {
+    PollSelect t1;
+    SocketSet t2;
+    SocketSet t3;
+    SocketSet t4;
+  };
 
-  p->m_readSet = new SocketSet;
-  p->m_writeSet = new SocketSet;
-  p->m_exceptSet = new SocketSet;
+  block_type* block = new (rak::cacheline_allocator<>()) block_type;
+
+  PollSelect* p = new (&block->t1) PollSelect;
+
+  p->m_readSet = new (&block->t2) SocketSet;
+  p->m_writeSet = new (&block->t3) SocketSet;
+  p->m_exceptSet = new (&block->t4) SocketSet;
 
   p->m_readSet->reserve(maxOpenSockets);
   p->m_writeSet->reserve(maxOpenSockets);
@@ -124,9 +147,9 @@ PollSelect::~PollSelect() {
   if (!m_readSet->empty() || !m_writeSet->empty() || !m_exceptSet->empty())
     throw internal_error("PollSelect::~PollSelect() called but the sets are not empty");
 
-  delete m_readSet;
-  delete m_writeSet;
-  delete m_exceptSet;
+//   delete m_readSet;
+//   delete m_writeSet;
+//   delete m_exceptSet;
 
   m_readSet = m_writeSet = m_exceptSet = NULL;
 }
@@ -158,15 +181,34 @@ PollSelect::perform(fd_set* readSet, fd_set* writeSet, fd_set* exceptSet) {
   // not be a problem as any except call should remove it from the m_*Set's.
   m_exceptSet->prepare();
   std::for_each(m_exceptSet->begin(), m_exceptSet->end(),
-		poll_check(exceptSet, std::mem_fun(&Event::event_error)));
+		poll_check(this, exceptSet, std::mem_fun(&Event::event_error)));
 
   m_readSet->prepare();
   std::for_each(m_readSet->begin(), m_readSet->end(),
-		poll_check(readSet, std::mem_fun(&Event::event_read)));
+		poll_check(this, readSet, std::mem_fun(&Event::event_read)));
 
   m_writeSet->prepare();
   std::for_each(m_writeSet->begin(), m_writeSet->end(),
-		poll_check(writeSet, std::mem_fun(&Event::event_write)));
+		poll_check(this, writeSet, std::mem_fun(&Event::event_write)));
+}
+
+inline static void
+log_poll_open(Event* event) {
+#ifdef LT_LOG_POLL_OPEN
+  static int log_fd = -1;
+  char buffer[256];
+
+  if (log_fd == -1) {
+    snprintf(buffer, 256, LT_LOG_POLL_OPEN, getpid());
+    
+    if ((log_fd = open(buffer, O_WRONLY | O_CREAT | O_TRUNC)) == -1)
+      throw internal_error("Could not open poll open log file.");
+  }
+
+  unsigned int buf_lenght = snprintf(buffer, 256, "open %i\n",
+                                     event->fd());
+
+#endif
 }
 
 void

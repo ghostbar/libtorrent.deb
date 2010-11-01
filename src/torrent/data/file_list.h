@@ -81,6 +81,7 @@ public:
   using base_type::rbegin;
   using base_type::rend;
 
+  using base_type::front;
   using base_type::back;
   using base_type::empty;
   using base_type::reserve;
@@ -94,6 +95,7 @@ public:
   bool                is_open() const                                 { return m_isOpen; }
   bool                is_done() const                                 { return completed_chunks() == size_chunks(); }
   bool                is_valid_piece(const Piece& piece) const;
+  bool                is_root_dir_created() const;
 
   // Check if the torrent is loaded as a multi-file torrent. This may
   // return true even for a torrent with just one file.
@@ -116,6 +118,7 @@ public:
 
   // You may only call set_root_dir after all nodes have been added.
   const std::string&  root_dir() const                                { return m_rootDir; }
+  const std::string&  frozen_root_dir() const                         { return m_frozenRootDir; }
   void                set_root_dir(const std::string& path);
 
   uint64_t            max_file_size() const                           { return m_maxFileSize; }
@@ -164,6 +167,10 @@ protected:
   iterator            inc_completed(iterator firstItr, uint32_t index) LIBTORRENT_NO_EXPORT;
   void                update_completed() LIBTORRENT_NO_EXPORT;
 
+  // Used for meta downloads; we only know the
+  // size after the first extension handshake.
+  void                reset_filesize(int64_t) LIBTORRENT_NO_EXPORT;
+
 private:
   bool                open_file(File* node, const Path& lastPath, int flags) LIBTORRENT_NO_EXPORT;
   void                make_directory(Path::const_iterator pathBegin, Path::const_iterator pathEnd, Path::const_iterator startItr) LIBTORRENT_NO_EXPORT;
@@ -182,6 +189,7 @@ private:
 
   // Reorder next minor version bump:
   bool                m_isMultiFile;
+  std::string         m_frozenRootDir;
 };
 
 }

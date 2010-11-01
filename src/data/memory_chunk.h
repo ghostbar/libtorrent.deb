@@ -37,6 +37,7 @@
 #ifndef LIBTORRENT_DATA_MEMORY_CHUNK_H
 #define LIBTORRENT_DATA_MEMORY_CHUNK_H
 
+#include <algorithm>
 #include <inttypes.h>
 #include <sys/mman.h>
 
@@ -85,13 +86,14 @@ class MemoryChunk {
 
   bool                has_permissions(int prot) const                      { return !(prot & ~m_prot); }
 
-  char*               ptr()                                                { return m_ptr; }
-  char*               begin()                                              { return m_begin; }
-  char*               end()                                                { return m_end; }
+  char*               ptr() const                                          { return m_ptr; }
+  char*               begin() const                                        { return m_begin; }
+  char*               end() const                                          { return m_end; }
 
   int                 get_prot() const                                     { return m_prot; }
 
   uint32_t            size() const                                         { return m_end - m_begin; }
+  uint32_t            size_aligned() const;
   inline void         clear();
   void                unmap();
 
@@ -138,6 +140,22 @@ MemoryChunk::clear() {
 inline uint32_t
 MemoryChunk::pages_touched(uint32_t offset, uint32_t length) const {
   return (length + page_align(offset) + m_pagesize - 1) / m_pagesize;
+}
+
+// The size of the mapped memory.
+inline uint32_t
+MemoryChunk::size_aligned() const {
+  return std::distance(m_ptr, m_end) + page_size() - ((std::distance(m_ptr, m_end) - 1) % page_size() + 1);
+}
+
+inline bool
+MemoryChunk::is_incore(uint32_t offset, uint32_t length) {
+  uint32_t size = pages_touched(offset, length);
+  char buf[size];
+  
+  incore(buf, offset, length);
+
+  return std::find(buf, buf + size, 0) == buf + size;
 }
 
 }
