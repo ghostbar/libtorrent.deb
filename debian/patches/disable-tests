@@ -1,0 +1,8 @@
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -1,4 +1,4 @@
+-SUBDIRS = src test
++SUBDIRS = src
+ 
+ pkgconfigdir = $(libdir)/pkgconfig
+ pkgconfig_DATA = libtorrent.pc
