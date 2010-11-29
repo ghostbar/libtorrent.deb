@@ -7,6 +7,8 @@ libtorrent (0.12.7-1) experimental; urgency=low
   * Added conflicts/replaces.
   * Standards-Version bumped to 3.9.1.
   * Prepared to upload in experimental.
+  * Fixed B-D to use dh's overrides.
+  * Package now cleans properly.
 
  -- Dmitry E. Oboukhov <unera@debian.org>  Mon, 29 Nov 2010 10:27:43 +0300
 

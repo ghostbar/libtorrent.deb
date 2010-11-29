@@ -1,3 +1,46 @@
+Description: Upstream changes introduced in version 0.12.7-1
+ This patch has been created by dpkg-source during the package build.
+ Here's the last changelog entry, hopefully it gives details on why
+ those changes were made:
+ .
+ libtorrent (0.12.7-1) experimental; urgency=low
+ .
+   [ Rogério Brito ]
+   * New upstream version.
+ .
+   [ Dmitry E. Oboukhov ]
+   * Added conflicts/replaces.
+   * Standards-Version bumped to 3.9.1.
+   * Prepared to upload in experimental.
+ .
+ The person named in the Author field signed this changelog entry.
+Author: Dmitry E. Oboukhov <unera@debian.org>
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: <vendor|upstream|other>, <url of original patch>
+Bug: <url in upstream bugtracker>
+Bug-Debian: http://bugs.debian.org/<bugnumber>
+Bug-Ubuntu: https://launchpad.net/bugs/<bugnumber>
+Forwarded: <no|not-needed|url proving that it has been forwarded>
+Reviewed-By: <name and email of someone who approved the patch>
+Last-Update: <YYYY-MM-DD>
+
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -264,7 +264,7 @@ target_alias = @target_alias@
+ top_build_prefix = @top_build_prefix@
+ top_builddir = @top_builddir@
+ top_srcdir = @top_srcdir@
+-SUBDIRS = src test
++SUBDIRS = src
+ pkgconfigdir = $(libdir)/pkgconfig
+ pkgconfig_DATA = libtorrent.pc
+ EXTRA_DIST = \
+
 --- a/Makefile.am
 +++ b/Makefile.am
 @@ -1,4 +1,4 @@
