@@ -1,8 +1,14 @@
-libtorrent (0.12.7-1) UNRELEASED; urgency=low
+libtorrent (0.12.7-1) experimental; urgency=low
 
+  [ Rogério Brito ]
   * New upstream version.
 
- -- Rogério Brito <rbrito@ime.usp.br>  Mon, 01 Nov 2010 15:16:48 -0200
+  [ Dmitry E. Oboukhov ]
+  * Added conflicts/replaces.
+  * Standards-Version bumped to 3.9.1.
+  * Prepared to upload in experimental.
+
+ -- Dmitry E. Oboukhov <unera@debian.org>  Mon, 29 Nov 2010 10:27:43 +0300
 
 libtorrent (0.12.6-2) unstable; urgency=low
 
