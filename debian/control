@@ -31,8 +31,6 @@ Description: a C++ BitTorrent library by Rakshasa (development files)
 Package: libtorrent13
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Conflicts: libtorrent11, libtorrent10, libtorrent9
-Replaces: libtorrent11, libtorrent10, libtorrent9
 Description: a C++ BitTorrent library by Rakshasa
  LibTorrent is a BitTorrent library written in C++ for *nix. It is
  designed to avoid redundant copying and storing of data that other
