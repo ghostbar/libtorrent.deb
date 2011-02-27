@@ -1,13 +1,16 @@
-libtorrent (0.12.7-2) UNRELEASED; urgency=low
+libtorrent (0.12.7-2) unstable; urgency=low
 
+  * Upload to unstable.
   * Pass --with-posix-fallocate to configure. Closes: #557521.
   * gitignore: don't take the .pc directory into account.
   * Keep the files in the checked out tree without patches.
   * Don't confuse dpkg with the removal of the .pc directory.
   * Enable parallel builds with dh in debian/rules.
   * Remove Conflicts/Replaces with older versions. Closes: #563093.
+  * Make Jose the maintainer and me only an uploader.
+  * Enable ipv6 support in the package. One step towards addressing #490277.
 
- -- Rogério Brito <rbrito@ime.usp.br>  Sun, 27 Feb 2011 09:44:44 -0300
+ -- Rogério Brito <rbrito@ime.usp.br>  Sun, 27 Feb 2011 12:06:42 -0300
 
 libtorrent (0.12.7-1) experimental; urgency=low
 
