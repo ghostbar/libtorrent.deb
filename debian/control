@@ -2,9 +2,9 @@
 Source: libtorrent
 Priority: extra
 Section: libs
-Maintainer: Rogério Brito <rbrito@ime.usp.br>
+Maintainer: Jose Luis Rivas <ghostbar@debian.org>
 DM-Upload-Allowed: yes
-Uploaders: Jose Luis Rivas <ghostbar@debian.org>,
+Uploaders: Rogério Brito <rbrito@ime.usp.br>,
 	Dmitry E. Oboukhov <unera@debian.org>
 Build-Depends: debhelper (>= 7.0.50~),
 	       libcppunit-dev,
