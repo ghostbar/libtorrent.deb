@@ -1,9 +1,16 @@
 #!/usr/bin/make -f
+
+ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+ifneq (alpha,$(ARCH))
+  OPTIONS += --with-posix-fallocate
+endif
+
 %:
 	dh $@ --parallel
 
 override_dh_auto_configure:
-	dh_auto_configure -- --with-posix-fallocate --enable-ipv6
+	dh_auto_configure -- --enable-ipv6 $(OPTIONS)
 
 override_dh_clean:
 	dh_clean
