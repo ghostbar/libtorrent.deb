@@ -1,3 +1,11 @@
+libtorrent (0.12.7-4) unstable; urgency=low
+
+  * Steal patch from upstream's bug tracking system to enable IPv6.
+  * Refresh patches to apply cleanly.
+  * This should, hopefully, be a good step towards addressing #490277.
+
+ -- Rogério Brito <rbrito@ime.usp.br>  Wed, 09 Mar 2011 20:04:41 -0300
+
 libtorrent (0.12.7-3) unstable; urgency=low
 
   * debian/rules:
