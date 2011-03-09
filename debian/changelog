@@ -1,3 +1,12 @@
+libtorrent (0.12.7-3) unstable; urgency=low
+
+  * debian/rules:
+    + Make use of fallocate depend on the architecture. Fixes FTBFS on alpha.
+  * debian/patches/*:
+    + Put proper description on the patch that disables tests.
+
+ -- Rogério Brito <rbrito@ime.usp.br>  Wed, 09 Mar 2011 19:24:32 -0300
+
 libtorrent (0.12.7-2) unstable; urgency=low
 
   * Upload to unstable.
