@@ -1,3 +1,12 @@
+libtorrent (0.12.7-5) unstable; urgency=low
+
+  * Use Steinar's "real" patch for IPv6. Addresses #490277, #618275,
+    and Closes: #617791.
+  * Adapt libtorrent-0.12.6-ipv6-07.patch. It FTBFS otherwise.
+  * Add proper attibution to the IPv6 patch.
+
+ -- Rogério Brito <rbrito@ime.usp.br>  Sun, 20 Mar 2011 01:06:18 -0300
+
 libtorrent (0.12.7-4) unstable; urgency=low
 
   * Steal patch from upstream's bug tracking system to enable IPv6.
