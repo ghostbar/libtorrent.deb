@@ -286,26 +286,25 @@
  }
  
  #endif
---- a/src/data/memory_chunk.cc
-+++ b/src/data/memory_chunk.cc
-@@ -44,6 +44,14 @@
- #include "torrent/exceptions.h"
- #include "memory_chunk.h"
- 
-+#ifdef __sun__
-+extern "C" int madvise(void *, size_t, int);
-+//#include <sys/mman.h>
-+//Should be the include line instead, but Solaris
-+//has an annoying bug wherein it doesn't declare
-+//madvise for C++.
-+#endif
-+
- namespace torrent {
- 
- uint32_t MemoryChunk::m_pagesize = getpagesize();
 --- a/src/dht/dht_node.cc
 +++ b/src/dht/dht_node.cc
-@@ -84,8 +84,20 @@
+@@ -54,8 +54,15 @@
+   m_recentlyInactive(0),
+   m_bucket(NULL) {
+ 
++#ifdef RAK_USE_INET6
++  if (sa->family() != rak::socket_address::af_inet &&
++      (sa->family() != rak::socket_address::af_inet6 || 
++       !sa->sa_inet6()->is_any()))
++    throw resource_error("Address not af_inet or in6addr_any");
++#else
+   if (sa->family() != rak::socket_address::af_inet)
+     throw resource_error("Address not af_inet");
++#endif
+ }
+ 
+ DhtNode::DhtNode(const std::string& id, const Object& cache) :
+@@ -84,8 +91,20 @@
  
  Object*
  DhtNode::store_cache(Object* container) const {
@@ -347,49 +346,37 @@
        total += read;
  
        // If it's not a valid bencode dictionary at all, it's probably not a DHT
---- a/src/net/Makefile.am
-+++ b/src/net/Makefile.am
-@@ -4,6 +4,8 @@
- 	address_list.cc \
- 	address_list.h \
- 	data_buffer.h \
-+	local_addr.cc \
-+	local_addr.h \
- 	listen.cc \
- 	listen.h \
- 	protocol_buffer.h \
---- a/src/net/Makefile.in
-+++ b/src/net/Makefile.in
-@@ -54,9 +54,9 @@
- CONFIG_CLEAN_VPATH_FILES =
- LTLIBRARIES = $(noinst_LTLIBRARIES)
- libsub_net_la_LIBADD =
--am_libsub_net_la_OBJECTS = address_list.lo listen.lo socket_base.lo \
--	socket_datagram.lo socket_fd.lo socket_set.lo socket_stream.lo \
--	throttle_internal.lo throttle_list.lo
-+am_libsub_net_la_OBJECTS = address_list.lo local_addr.lo listen.lo \
-+	socket_base.lo socket_datagram.lo socket_fd.lo socket_set.lo \
-+	socket_stream.lo throttle_internal.lo throttle_list.lo
- libsub_net_la_OBJECTS = $(am_libsub_net_la_OBJECTS)
- DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
- depcomp = $(SHELL) $(top_srcdir)/depcomp
-@@ -220,6 +220,8 @@
- 	address_list.cc \
- 	address_list.h \
- 	data_buffer.h \
-+	local_addr.cc \
-+	local_addr.h \
- 	listen.cc \
- 	listen.h \
- 	protocol_buffer.h \
-@@ -294,6 +296,7 @@
+--- a/src/torrent/download_info.h
++++ b/src/torrent/download_info.h
+@@ -205,6 +205,28 @@
+   mutable signal_chunk_type   m_signalChunkFailed;
+ };
  
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/address_list.Plo@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/listen.Plo@am__quote@
-+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/local_addr.Plo@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/socket_base.Plo@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/socket_datagram.Plo@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/socket_fd.Plo@am__quote@
++#ifdef RAK_USE_INET6
++struct SocketAddressCompact6 {
++  SocketAddressCompact6() {}
++  SocketAddressCompact6(in6_addr a, uint16_t p) : addr(a), port(p) {}
++  SocketAddressCompact6(const rak::socket_address_inet6* sa) : addr(sa->address()), port(sa->port_n()) {}
++
++  operator rak::socket_address () const {
++    rak::socket_address sa;
++    sa.sa_inet6()->clear();
++    sa.sa_inet6()->set_port_n(port);
++    sa.sa_inet6()->set_address(addr);
++
++    return sa;
++  }
++
++  in6_addr addr;
++  uint16_t port;
++
++  const char*         c_str() const { return reinterpret_cast<const char*>(this); }
++} __attribute__ ((packed));
++#endif
++
+ }
+ 
+ #endif
 --- a/src/net/address_list.cc
 +++ b/src/net/address_list.cc
 @@ -92,4 +92,16 @@
@@ -421,38 +408,9 @@
  
  private:
    static rak::socket_address  parse_address(const Object& b);
-@@ -99,6 +102,28 @@
-   const char*         c_str() const { return reinterpret_cast<const char*>(this); }
- } __attribute__ ((packed));
- 
-+#ifdef RAK_USE_INET6
-+struct SocketAddressCompact6 {
-+  SocketAddressCompact6() {}
-+  SocketAddressCompact6(in6_addr a, uint16_t p) : addr(a), port(p) {}
-+  SocketAddressCompact6(const rak::socket_address_inet6* sa) : addr(sa->address()), port(sa->port_n()) {}
-+
-+  operator rak::socket_address () const {
-+    rak::socket_address sa;
-+    sa.sa_inet6()->clear();
-+    sa.sa_inet6()->set_port_n(port);
-+    sa.sa_inet6()->set_address(addr);
-+
-+    return sa;
-+  }
-+
-+  in6_addr addr;
-+  uint16_t port;
-+
-+  const char*         c_str() const { return reinterpret_cast<const char*>(this); }
-+} __attribute__ ((packed));
-+#endif
-+
- }
- 
- #endif
 --- /dev/null
 +++ b/src/net/local_addr.cc
-@@ -0,0 +1,342 @@
+@@ -0,0 +1,336 @@
 +// libTorrent - BitTorrent library
 +// Copyright (C) 2005-2007, Jari Sundell
 +//
@@ -492,13 +450,7 @@
 +#include "config.h"
 +
 +#include <stdio.h>
-+
-+#ifdef __sun__
-+/* ifaddr.h doesn't exist on Solaris */
-+#else
 +#include <ifaddrs.h>
-+#endif
-+
 +#include <rak/socket_address.h>
 +#include <sys/types.h>
 +#include <errno.h>
@@ -518,7 +470,7 @@
 +// IPv4 priority, from highest to lowest:
 +//
 +//   1. Everything else (global address)
-+//   2. Private address space (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
++//   2. Private address space (10.0.0.0/8, 172.16.0.0/16, 192.168.0.0/24)
 +//   3. Empty/INADDR_ANY (0.0.0.0)
 +//   4. Link-local address (169.254.0.0/16)
 +//   5. Localhost (127.0.0.0/8)
@@ -526,14 +478,14 @@
 +  if ((addr.s_addr & htonl(0xff000000U)) == htonl(0x7f000000U)) {
 +    return 5;
 +  }
-+  if ((addr.s_addr & htonl(0xffff0000U)) == htonl(0xa9fe0000U)) {
++  if (addr.s_addr == htonl(0)) {
 +    return 4;
 +  }
-+  if (addr.s_addr == htonl(0)) {
++  if ((addr.s_addr & htonl(0xffff0000U)) == htonl(0xa9fe0000U)) {
 +    return 3;
 +  }
 +  if ((addr.s_addr & htonl(0xff000000U)) == htonl(0x0a000000U) ||
-+      (addr.s_addr & htonl(0xfff00000U)) == htonl(0xac100000U) ||
++      (addr.s_addr & htonl(0xffff0000U)) == htonl(0xac100000U) ||
 +      (addr.s_addr & htonl(0xffff0000U)) == htonl(0xc0a80000U)) {
 +    return 2;
 +  }
@@ -543,7 +495,7 @@
 +#ifdef RAK_USE_INET6
 +// IPv6 priority, from highest to lowest:
 +//
-+//  1. Global address (2000::/3 not in 6to4 or Teredo)
++//  1. Global address (2000::/16 not in 6to4 or Teredo)
 +//  2. 6to4 (2002::/16)
 +//  3. Teredo (2001::/32)
 +//  4. Empty/INADDR_ANY (::)
@@ -710,7 +662,7 @@
 +      int plen = IFA_PAYLOAD(nlmsg);
 +      for (const rtattr *rta = IFA_RTA(ifa);
 +           RTA_OK(rta, plen);
-+   rta = RTA_NEXT(rta, plen)) {
++	   rta = RTA_NEXT(rta, plen)) {
 +        if (rta->rta_type != IFA_LOCAL &&
 +            rta->rta_type != IFA_ADDRESS) {
 +          continue;
@@ -862,6 +814,49 @@
 +}
 +
 +#endif /* LIBTORRENT_NET_LOCAL_ADDR_H */
+--- a/src/net/Makefile.am
++++ b/src/net/Makefile.am
+@@ -4,6 +4,8 @@
+ 	address_list.cc \
+ 	address_list.h \
+ 	data_buffer.h \
++	local_addr.cc \
++	local_addr.h \
+ 	listen.cc \
+ 	listen.h \
+ 	protocol_buffer.h \
+--- a/src/net/Makefile.in
++++ b/src/net/Makefile.in
+@@ -54,9 +54,9 @@
+ CONFIG_CLEAN_VPATH_FILES =
+ LTLIBRARIES = $(noinst_LTLIBRARIES)
+ libsub_net_la_LIBADD =
+-am_libsub_net_la_OBJECTS = address_list.lo listen.lo socket_base.lo \
+-	socket_datagram.lo socket_fd.lo socket_set.lo socket_stream.lo \
+-	throttle_internal.lo throttle_list.lo
++am_libsub_net_la_OBJECTS = address_list.lo local_addr.lo listen.lo \
++	socket_base.lo socket_datagram.lo socket_fd.lo socket_set.lo \
++	socket_stream.lo throttle_internal.lo throttle_list.lo
+ libsub_net_la_OBJECTS = $(am_libsub_net_la_OBJECTS)
+ DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
+ depcomp = $(SHELL) $(top_srcdir)/depcomp
+@@ -220,6 +220,8 @@
+ 	address_list.cc \
+ 	address_list.h \
+ 	data_buffer.h \
++	local_addr.cc \
++	local_addr.h \
+ 	listen.cc \
+ 	listen.h \
+ 	protocol_buffer.h \
+@@ -294,6 +296,7 @@
+ 
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/address_list.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/listen.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/local_addr.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/socket_base.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/socket_datagram.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/socket_fd.Plo@am__quote@
 --- a/src/net/socket_datagram.cc
 +++ b/src/net/socket_datagram.cc
 @@ -73,7 +73,13 @@
