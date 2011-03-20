@@ -1,3 +1,8 @@
+Description: Implement IPv6 for libtorrent
+Author: "Steinar H. Gunderson" <sesse@debian.org>
+Reviewed-By: Rogério Theodoro de Brito <rbrito@ime.usp.br>
+Last-Updated: 2011-03-20
+
 --- a/rak/socket_address.h
 +++ b/rak/socket_address.h
 @@ -145,7 +145,7 @@
