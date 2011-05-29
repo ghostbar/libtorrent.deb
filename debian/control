@@ -20,7 +20,7 @@ Package: libtorrent-dev
 Section: libdevel
 Architecture: any
 Depends: libtorrent13 (= ${binary:Version}), libsigc++-2.0-dev, ${misc:Depends}
-Description: a C++ BitTorrent library by Rakshasa (development files)
+Description: C++ BitTorrent library by Rakshasa (development files)
  LibTorrent is a BitTorrent library written in C++ for *nix. It is
  designed to avoid redundant copying and storing of data that other
  clients and libraries suffer from.
@@ -31,7 +31,7 @@ Description: a C++ BitTorrent library by Rakshasa (development files)
 Package: libtorrent13
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: a C++ BitTorrent library by Rakshasa
+Description: C++ BitTorrent library by Rakshasa
  LibTorrent is a BitTorrent library written in C++ for *nix. It is
  designed to avoid redundant copying and storing of data that other
  clients and libraries suffer from.
