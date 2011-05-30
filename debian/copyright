@@ -1,35 +1,31 @@
-Format-Specification:
-    http://wiki.debian.org/Proposals/CopyrightFormat?action=recall&rev=196
-Upstream-Author: Jari Sundell <jaris@ifi.uio.no>
-Packaged-By: Qingning Huo <qhuo@mayhq.co.uk>
+Format: http://dep.debian.net/deps/dep5/
 Upstream-Name: LibTorrent
-Original-Source-Location: http://libtorrent.rakshasa.no/
-Original-Source-Command: uscan --force-download
-Original-Source-Depends: devscripts
+Upstream-Contact: Jari Sundell <jaris@ifi.uio.no>
+Source: http://libtorrent.rakshasa.no/
 
 Files: *
 Copyright: © 2005-2007 Jari Sundell <jaris@ifi.uio.no>
-License: GPL-2+ with a special exception
+License: GPL-2+ with OpenSSL exception
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation; either version 2 of the License, or
  (at your option) any later version.
-
+ .
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
-
+ .
  You should have received a copy of the GNU General Public License
  along with this package; if not, write to the Free Software
  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
-
+ .
  In addition, as a special exception, the copyright holders give
  permission to link the code of portions of this program with the
  OpenSSL library under certain conditions as described in each
  individual source file, and distribute linked combinations
  including the two.
-
+ .
  You must obey the GNU General Public License in all respects for
  all of the code used other than OpenSSL.  If you modify file(s)
  with this exception, you may extend this exception to your version
@@ -37,26 +33,31 @@ License: GPL-2+ with a special exception
  wish to do so, delete this exception statement from your version.
  If you delete this exception statement from all source files in the
  program, then also delete it here.
+ .
+ On Debian GNU/Linux systems, the complete text of the GNU General Public
+ License can be found in `/usr/share/common-licenses/GPL-2'.
 
 Files: debian/*
 Copyright: © 2005-2006 Qingning Huo <qhuo@mayhq.co.uk>
 	   © 2006-2008 Jose Luis Rivas <ghostbar38@gmail.com>
 	   © 2009-2011 Rogério Theodoro de Brito <rbrito@ime.usp.br>
 License: GPL-2+
+ On Debian GNU/Linux systems, the complete text of the GNU General Public
+ License can be found in `/usr/share/common-licenses/GPL-2'.
 
 Files: src/utils/sha_fast.*
 Copyright: © 1995-1999 by Cryptography Research, Inc.
-License: MPL 1.1 | GPL-2+
+License: MPL-1.1 or GPL-2+
  The contents of this file are subject to the Mozilla Public
  License Version 1.1 (the "License"); you may not use this file
  except in compliance with the License. You may obtain a copy of
  the License at http://www.mozilla.org/MPL/
-
+ .
  Software distributed under the License is distributed on an "AS
  IS" basis, WITHOUT WARRANTY OF ANY KIND, either express or
  implied. See the License for the specific language governing
  rights and limitations under the License.
-
+ .
  Alternatively, the contents of this file may be used under the
  terms of the GNU General Public License Version 2 or later (the
  "GPL"), in which case the provisions of the GPL are applicable
@@ -68,6 +69,3 @@ License: MPL 1.1 | GPL-2+
  the GPL.  If you do not delete the provisions above, a recipient
  may use your version of this file under either the MPL or the
  GPL.
-
-On Debian GNU/Linux systems, the complete text of the GNU General
-Public License can be found in `/usr/share/common-licenses/GPL-2'.
