@@ -1,3 +1,17 @@
+libtorrent (0.12.7-6) unstable; urgency=low
+
+  * [d985fd9] Add patches to fix FTBFS with recent GCCs. Closes: #625028.
+  * [416efb1] Remove article from the short description of the packages.
+  * [9f7495a] Don't install the .la files. Closes: #622478.
+  * [054b387] Use wrap-and-sort to normalize the debian subdir.
+  * [b46babc] Ship an upstream changelog with the package.
+  * [7a76e32] Add years of copyright to my packaging of rtorrent.
+  * [2bc93f6] Make debian/copyright parseable by
+    `config-edit -application dpkg-copyright`.
+  * [85de9a2] Make sure the package conforms to policy 3.9.2.
+
+ -- Rogério Brito <rbrito@ime.usp.br>  Sun, 29 May 2011 22:23:50 -0300
+
 libtorrent (0.12.7-5) unstable; urgency=low
 
   * Use Steinar's "real" patch for IPv6. Addresses #490277, #618275,
