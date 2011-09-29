@@ -1,3 +1,12 @@
+libtorrent (0.12.9-1) UNRELEASED; urgency=low
+
+  * debian/README.source: Document the preparation of the package.
+  * Imported Upstream version 0.12.9
+  * debian/patches: Refresh patches.
+  * debian/patches: Disable 561232.patch.
+
+ -- Rogério Brito <rbrito@ime.usp.br>  Thu, 29 Sep 2011 20:40:50 -0300
+
 libtorrent (0.12.7-6) unstable; urgency=low
 
   * [d985fd9] Add patches to fix FTBFS with recent GCCs. Closes: #625028.
