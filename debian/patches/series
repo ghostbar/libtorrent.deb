@@ -1,5 +1,5 @@
 g++-fixes.patch
 spelling-fixes
-561232.patch
+#561232.patch
 disable-tests
 libtorrent-0.12.6-ipv6-07.patch
