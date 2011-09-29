@@ -353,7 +353,7 @@ Last-Updated: 2011-03-20
        // If it's not a valid bencode dictionary at all, it's probably not a DHT
 --- a/src/torrent/download_info.h
 +++ b/src/torrent/download_info.h
-@@ -205,6 +205,28 @@
+@@ -204,6 +204,28 @@
    mutable signal_chunk_type   m_signalChunkFailed;
  };
  
@@ -853,7 +853,7 @@ Last-Updated: 2011-03-20
  libsub_net_la_OBJECTS = $(am_libsub_net_la_OBJECTS)
  DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
  depcomp = $(SHELL) $(top_srcdir)/depcomp
-@@ -220,6 +220,8 @@
+@@ -223,6 +223,8 @@
  	address_list.cc \
  	address_list.h \
  	data_buffer.h \
@@ -862,7 +862,7 @@ Last-Updated: 2011-03-20
  	listen.cc \
  	listen.h \
  	protocol_buffer.h \
-@@ -294,6 +296,7 @@
+@@ -297,6 +299,7 @@
  
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/address_list.Plo@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/listen.Plo@am__quote@
@@ -1111,7 +1111,7 @@ Last-Updated: 2011-03-20
  }
 --- a/src/torrent/peer/peer_list.cc
 +++ b/src/torrent/peer/peer_list.cc
-@@ -65,15 +65,23 @@
+@@ -67,15 +67,23 @@
      // humans.
      return sa1->sa_inet()->address_h() < sa2->sa_inet()->address_h();
  
