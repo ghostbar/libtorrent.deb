@@ -39,12 +39,12 @@
 #include <algorithm>
 #include <rak/socket_address.h>
 
-#include "download/choke_manager.h"
 #include "download/download_main.h"
 #include "net/address_list.h"
 #include "protocol/peer_connection_base.h"
 #include "torrent/exceptions.h"
 #include "torrent/download_info.h"
+#include "torrent/download/choke_queue.h"
 
 #include "connection_list.h"
 #include "peer.h"
@@ -83,6 +83,11 @@ ConnectionList::insert(PeerInfo* peerInfo, const SocketFd& fd, Bitfield* bitfiel
   peerInfo->set_connection(peerConnection);
   peerInfo->set_last_connection(cachedTime.seconds());
   peerConnection->initialize(m_download, peerInfo, fd, bitfield, encryptionInfo, extensions);
+
+  if (!peerConnection->get_fd().is_valid()) {
+    delete peerConnection;
+    return NULL;
+  }
 
   base_type::push_back(peerConnection);
 
@@ -222,7 +227,7 @@ ConnectionList::set_max_size(size_type v) {
     throw input_error("Max peer connections must be between 0 and 2^16.");
 
   if (v == 0)
-    v = ChokeManager::unlimited;
+    v = choke_queue::unlimited;
 
   m_maxSize = v;
   m_download->info()->change_flags(DownloadInfo::flag_accepting_new_peers, size() < m_maxSize);

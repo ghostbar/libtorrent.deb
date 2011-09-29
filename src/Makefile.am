@@ -14,7 +14,9 @@ libtorrent_la_LDFLAGS = -version-info $(LIBTORRENT_INTERFACE_VERSION_INFO)
 libtorrent_la_LIBADD = \
 	torrent/libsub_torrent.la \
 	torrent/data/libsub_torrentdata.la \
+	torrent/download/libsub_torrentdownload.la \
 	torrent/peer/libsub_torrentpeer.la \
+	torrent/utils/libsub_torrentutils.la \
 	data/libsub_data.la \
 	dht/libsub_dht.la \
 	download/libsub_download.la \
@@ -27,8 +29,6 @@ libtorrent_la_SOURCES = \
 	globals.cc \
 	globals.h \
 	manager.cc \
-	manager.h \
-	resource_manager.cc \
-	resource_manager.h
+	manager.h
 
 INCLUDES = -I$(srcdir) -I$(top_srcdir)

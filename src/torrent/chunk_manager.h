@@ -44,6 +44,9 @@
 
 namespace torrent {
 
+// TODO: Currently all chunk lists are inserted, despite the download
+// not being open/active.
+
 class LIBTORRENT_EXPORT ChunkManager : private std::vector<ChunkList*> {
 public:
   typedef std::vector<ChunkList*> base_type;
@@ -58,6 +61,10 @@ public:
   ~ChunkManager();
   
   uint64_t            memory_usage() const                      { return m_memoryUsage; }
+  uint64_t            sync_queue_memory_usage() const;
+
+  uint32_t            memory_block_count() const                { return m_memoryBlockCount; }
+  uint32_t            sync_queue_size() const;
 
   // Should we allow the client to reserve some memory?
 
@@ -106,9 +113,18 @@ public:
   // usage by indicating how much it uses. This shouldn't really be
   // nessesary unless the client maps large amounts of memory.
   //
+  // If the caller finds out the allocated memory quota isn't needed
+  // due to e.g. other errors then 'deallocate_unused' must be called
+  // within the context of the original 'allocate' caller in order to
+  // properly be reflected when logging.
+  //
   // The primary user of these functions is ChunkList.
-  bool                allocate(uint32_t size);
-  void                deallocate(uint32_t size);
+
+  static const int allocate_revert_log = (1 << 0);
+  static const int allocate_dont_log   = (1 << 1);
+
+  bool                allocate(uint32_t size, int flags = 0);
+  void                deallocate(uint32_t size, int flags = 0);
 
   void                try_free_memory(uint64_t size);
   
@@ -130,6 +146,8 @@ private:
 
   uint64_t            m_memoryUsage;
   uint64_t            m_maxMemoryUsage;
+
+  uint32_t            m_memoryBlockCount;
 
   bool                m_safeSync;
   uint32_t            m_timeoutSync;

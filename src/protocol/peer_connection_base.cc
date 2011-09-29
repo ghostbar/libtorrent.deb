@@ -41,21 +41,22 @@
 #include <rak/error_number.h>
 #include <rak/string_manip.h>
 
-#include "torrent/exceptions.h"
-#include "torrent/data/block.h"
-#include "torrent/chunk_manager.h"
 #include "data/chunk_iterator.h"
 #include "data/chunk_list.h"
-#include "download/choke_manager.h"
 #include "download/chunk_selector.h"
 #include "download/chunk_statistics.h"
 #include "download/download_main.h"
 #include "net/socket_base.h"
+#include "torrent/exceptions.h"
+#include "torrent/data/block.h"
+#include "torrent/chunk_manager.h"
 #include "torrent/connection_manager.h"
 #include "torrent/download_info.h"
 #include "torrent/throttle.h"
+#include "torrent/download/choke_queue.h"
 #include "torrent/peer/peer_info.h"
 #include "torrent/peer/connection_list.h"
+#include "torrent/utils/log_files.h"
 
 #include "extensions.h"
 #include "peer_connection_base.h"
@@ -137,6 +138,19 @@ PeerConnectionBase::initialize(DownloadMain* download, PeerInfo* peerInfo, Socke
   download_queue()->set_delegator(m_download->delegator());
   download_queue()->set_peer_chunks(&m_peerChunks);
 
+  try {
+    initialize_custom();
+
+  } catch (close_connection& e) {
+    // The handshake manager closes the socket for us.
+    m_peerInfo = NULL;
+    m_download = NULL;
+    m_extensions = NULL;
+
+    get_fd().clear();
+    return;
+  }
+
   manager->poll()->open(this);
   manager->poll()->insert_read(this);
   manager->poll()->insert_write(this);
@@ -155,8 +169,6 @@ PeerConnectionBase::initialize(DownloadMain* download, PeerInfo* peerInfo, Socke
     m_sendInterested = true;
     m_downInterested = true;
   }
-
-  initialize_custom();
 }
 
 void
@@ -215,7 +227,7 @@ PeerConnectionBase::receive_upload_choke(bool choke) {
 
   m_sendChoked = true;
   m_upChoke.set_unchoked(!choke);
-  m_upChoke.set_time_last_choke(cachedTime);
+  m_upChoke.set_time_last_choke(cachedTime.usec());
 
   return true;
 }
@@ -228,15 +240,17 @@ PeerConnectionBase::receive_download_choke(bool choke) {
   write_insert_poll_safe();
 
   m_downChoke.set_unchoked(!choke);
-  m_downChoke.set_time_last_choke(cachedTime);
+  m_downChoke.set_time_last_choke(cachedTime.usec());
 
   if (choke) {
     m_peerChunks.download_cache()->disable();
 
     // If the queue isn't empty, then we might still receive some
-    // pieces, so don't remove us from throttle.
-    if (!download_queue()->is_downloading() && download_queue()->queued_empty())
+    // pieces, so don't remove us from throttle or release the chunk.
+    if (!download_queue()->is_downloading() && download_queue()->queued_empty()) {
       m_down->throttle()->erase(m_peerChunks.download_throttle());
+      down_chunk_release();
+    }
 
     // Send uninterested if unchoked, but only _after_ receiving our
     // chunks?
@@ -280,69 +294,21 @@ PeerConnectionBase::receive_download_choke(bool choke) {
   return true;
 }
 
-inline static void
-log_upload_chunk_mincore(Chunk* chunk, const Piece& piece, bool new_index, bool& continous) {
-#ifdef LT_LOG_MINCORE_FILE
-  static int mincore_fd = -1;
-  static int32_t ticker = rak::timer::current().seconds() / 10 * 10;
-
-  static int counter_incore = 0;
-  static int counter_not_incore = 0;
-  static int counter_incore_new = 0;
-  static int counter_not_incore_new = 0;
-  static int counter_incore_break = 0;
-
-  if (rak::timer::current().seconds() >= ticker + 10) {
-    char buffer[256];
-
-    if (mincore_fd == -1) {
-      snprintf(buffer, 256, LT_LOG_MINCORE_FILE, getpid());
-    
-      if ((mincore_fd = open(buffer, O_WRONLY | O_CREAT | O_TRUNC)) == -1)
-        throw internal_error("Could not open mincore log file.");
-    }
-
-    // Log the result of mincore for every piece uploaded to a file.
-    unsigned int buf_lenght = snprintf(buffer, 256, "%i %u %u %u %u %u\n",
-                                       ticker,
-                                       counter_incore, counter_incore_new, counter_not_incore,
-                                       counter_not_incore_new, counter_incore_break);
-
-    write(mincore_fd, buffer, buf_lenght);
-    
-    ticker = rak::timer::current().seconds() / 10 * 10;
-
-    counter_incore = 0;
-    counter_not_incore = 0;
-    counter_incore_new = 0;
-    counter_not_incore_new = 0;
-    counter_incore_break = 0;
-  }
-
-  bool is_incore = chunk->is_incore(piece.offset(), piece.length());
-
-  counter_incore += !new_index && is_incore;
-  counter_incore_new += new_index && is_incore;
-  counter_not_incore += !new_index && !is_incore;
-  counter_not_incore_new += new_index && !is_incore;
-
-  counter_incore_break += continous && !is_incore;
-  continous = is_incore;
-#endif
-}
-
 void
 PeerConnectionBase::load_up_chunk() {
   if (m_upChunk.is_valid() && m_upChunk.index() == m_upPiece.index()) {
     // Better checking needed.
     //     m_upChunk.chunk()->preload(m_upPiece.offset(), m_upChunk.chunk()->size());
-    log_upload_chunk_mincore(m_upChunk.chunk(), m_upPiece, false, m_incoreContinous);
+
+    if (log_files[LOG_MINCORE_STATS].is_open())
+      log_mincore_stats_func(m_upChunk.chunk()->is_incore(m_upPiece.offset(), m_upPiece.length()), false, m_incoreContinous);
+
     return;
   }
 
   up_chunk_release();
   
-  m_upChunk = m_download->chunk_list()->get(m_upPiece.index(), false);
+  m_upChunk = m_download->chunk_list()->get(m_upPiece.index());
   
   if (!m_upChunk.is_valid())
     throw storage_error("File chunk read error: " + std::string(m_upChunk.error_number().c_str()));
@@ -353,7 +319,10 @@ PeerConnectionBase::load_up_chunk() {
   }
 
   m_incoreContinous = false;
-  log_upload_chunk_mincore(m_upChunk.chunk(), m_upPiece, true, m_incoreContinous);
+
+  if (log_files[LOG_MINCORE_STATS].is_open())
+    log_mincore_stats_func(m_upChunk.chunk()->is_incore(m_upPiece.offset(), m_upPiece.length()), true, m_incoreContinous);
+
   m_incoreContinous = true;
 
   // Also check if we've already preloaded in the recent past, even
@@ -411,7 +380,7 @@ PeerConnectionBase::down_chunk_start(const Piece& piece) {
   
   if (!m_downChunk.is_valid() || piece.index() != m_downChunk.index()) {
     down_chunk_release();
-    m_downChunk = m_download->chunk_list()->get(piece.index(), true);
+    m_downChunk = m_download->chunk_list()->get(piece.index(), ChunkList::get_writable);
   
     if (!m_downChunk.is_valid())
       throw storage_error("File chunk write error: " + std::string(m_downChunk.error_number().c_str()) + ".");
@@ -439,7 +408,15 @@ PeerConnectionBase::down_chunk_finished() {
   if (m_downStall > 0)
     m_downStall--;
         
-  // TODO: clear m_down.data?
+  // We need to release chunks when we're not sure if they will be
+  // used in the near future so as to avoid hitting the address space
+  // limit in high-bandwidth situations.
+  //
+  // Some tweaking of the pipe size might be necessary if the queue
+  // empties too often.
+  if (m_downChunk.is_valid() &&
+      (download_queue()->queued_empty() || m_downChunk.index() != download_queue()->next_queued_piece().index()))
+    down_chunk_release();
 
   // If we were choked by choke_manager but still had queued pieces,
   // then we might still be in the throttle.

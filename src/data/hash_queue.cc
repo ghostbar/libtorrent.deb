@@ -39,6 +39,7 @@
 #include <functional>
 
 #include "torrent/exceptions.h"
+#include "torrent/thread_base.h"
 
 #include "hash_queue.h"
 #include "hash_chunk.h"
@@ -72,7 +73,7 @@ struct HashQueueWillneed {
 
 HashQueue::HashQueue() :
   m_readAhead(10 << 20),
-  m_interval(5000),
+  m_interval(2000),
   m_maxTries(5) {
 
   m_taskWork.set_slot(rak::mem_fn(this, &HashQueue::work));
@@ -102,7 +103,20 @@ HashQueue::push_back(ChunkHandle handle, slot_done_type d) {
   }
 
   base_type::push_back(HashQueueNode(hc, d));
-  willneed(m_readAhead);
+
+  // Try to hash as much as possible immediately if incore, so that a
+  // newly downloaded chunk doesn't get swapped out when downloading
+  // at high speeds / low memory.
+  base_type::back().perform_remaining(false);
+
+  // Properly adjust this so it doesn't willneed on already hashed
+  // memory regions.
+  //
+  // Since we're already doing willneed in the hash checker, don't do
+  // willneed here as both the initial hash check and newly downloaded
+  // chunks use push_back(...).
+  //
+  // willneed(m_readAhead);
 }
 
 bool
@@ -143,21 +157,29 @@ HashQueue::clear() {
 
 void
 HashQueue::work() {
-  if (empty())
-    return;
-
-  if (!check(++m_tries >= m_maxTries))
-    return priority_queue_insert(&taskScheduler, &m_taskWork, cachedTime + m_interval);
+  while (!empty()) {
+    if (!check(++m_tries >= m_maxTries))
+      return priority_queue_insert(&taskScheduler, &m_taskWork, cachedTime + m_interval);
+    
+    m_tries = std::max(0, (int)(m_tries - 2));
+  }
 
   if (!empty() && !m_taskWork.is_queued())
     priority_queue_insert(&taskScheduler, &m_taskWork, cachedTime + 1);
-
-  m_tries = std::min(0, m_tries - 2);
 }
 
 bool
 HashQueue::check(bool force) {
-  if (!base_type::front().perform(force)) {
+  // Force hash check when the queue is more than 100 chunks, as that
+  // is indicative of the hash queue falling behind on hashing
+  // downloaded chunks.
+  force = force || size() > 50;
+
+  // TODO: The read-ahead algorithm here calls msync will-need, yet we
+  // are only trying to hash the first chunk. Fix this so that only
+  // whole chunks are called with will-need and that we check mincore
+  // for all those chunks in case we can hash them.
+  if (base_type::front().get_chunk()->remaining() != 0 && !base_type::front().perform_remaining(force)) {
     willneed(m_readAhead);
     return false;
   }

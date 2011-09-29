@@ -34,39 +34,59 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#ifndef LIBTORRENT_DOWNLOAD_CHOKE_MANAGER_NODE_H
-#define LIBTORRENT_DOWNLOAD_CHOKE_MANAGER_NODE_H
+#ifndef LIBTORRENT_DOWNLOAD_MANAGER_H
+#define LIBTORRENT_DOWNLOAD_MANAGER_H
 
-#include <rak/timer.h>
+#include <vector>
+#include <torrent/common.h>
 
 namespace torrent {
 
-class ChokeManagerNode {
+class DownloadWrapper;
+class DownloadInfo;
+class DownloadMain;
+
+class LIBTORRENT_EXPORT DownloadManager : private std::vector<DownloadWrapper*> {
 public:
-  ChokeManagerNode() :
-    m_queued(false),
-    m_unchoked(false),
-    m_snubbed(false) {}
+  typedef std::vector<DownloadWrapper*> base_type;
 
-  bool                queued() const                          { return m_queued; }
-  void                set_queued(bool s)                      { m_queued = s; }
+  typedef base_type::value_type value_type;
+  typedef base_type::pointer pointer;
+  typedef base_type::const_pointer const_pointer;
+  typedef base_type::reference reference;
+  typedef base_type::const_reference const_reference;
+  typedef base_type::size_type size_type;
 
-  bool                choked() const                          { return !m_unchoked; }
-  bool                unchoked() const                        { return m_unchoked; }
-  void                set_unchoked(bool s)                    { m_unchoked = s; }
+  typedef base_type::iterator iterator;
+  typedef base_type::reverse_iterator reverse_iterator;
+  typedef base_type::const_iterator const_iterator;
+  typedef base_type::const_reverse_iterator const_reverse_iterator;
 
-  bool                snubbed() const                         { return m_snubbed; }
-  void                set_snubbed(bool s)                     { m_snubbed = s; }
+  using base_type::empty;
+  using base_type::size;
 
-  rak::timer          time_last_choke() const                 { return m_timeLastChoke; }
-  void                set_time_last_choke(rak::timer t)       { m_timeLastChoke = t; }
+  using base_type::begin;
+  using base_type::end;
+  using base_type::rbegin;
+  using base_type::rend;
 
-private:
-  bool                m_queued;
-  bool                m_unchoked;
-  bool                m_snubbed;
+  ~DownloadManager() { clear(); }
 
-  rak::timer          m_timeLastChoke;
+  iterator            find(const std::string& hash);
+  iterator            find(const HashString& hash);
+  iterator            find(DownloadInfo* info);
+
+  DownloadMain*       find_main(const char* hash);
+  DownloadMain*       find_main_obfuscated(const char* hash);
+
+  //
+  // Don't export:
+  //
+
+  iterator            insert(DownloadWrapper* d) LIBTORRENT_NO_EXPORT;
+  iterator            erase(DownloadWrapper* d) LIBTORRENT_NO_EXPORT;
+
+  void                clear() LIBTORRENT_NO_EXPORT;
 };
 
 }

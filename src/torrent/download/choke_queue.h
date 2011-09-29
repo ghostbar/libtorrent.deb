@@ -34,26 +34,28 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#ifndef LIBTORRENT_DOWNLOAD_CHOKE_MANAGER_H
-#define LIBTORRENT_DOWNLOAD_CHOKE_MANAGER_H
+#ifndef LIBTORRENT_DOWNLOAD_CHOKE_QUEUE_H
+#define LIBTORRENT_DOWNLOAD_CHOKE_QUEUE_H
+
+#include <torrent/common.h>
 
 #include <list>
 #include <vector>
 #include <inttypes.h>
-#include <rak/functional.h>
+#include <tr1/functional>
 
 namespace torrent {
 
-class ChokeManagerNode;
+class choke_status;
 class ConnectionList;
 class PeerConnectionBase;
-class ResourceManager;
+class DownloadMain;
 
-class ChokeManager {
+class LIBTORRENT_EXPORT choke_queue {
 public:
-  typedef rak::mem_fun1<ResourceManager, void, int>              slot_unchoke;
-  typedef rak::mem_fun0<ResourceManager, unsigned int>           slot_can_unchoke;
-  typedef std::mem_fun1_t<bool, PeerConnectionBase, bool>        slot_connection;
+  typedef std::tr1::function<void (int)>                         slot_unchoke;
+  typedef std::tr1::function<unsigned int ()>                    slot_can_unchoke;
+  typedef std::tr1::function<bool (PeerConnectionBase*, bool)>   slot_connection;
 
   typedef std::vector<std::pair<PeerConnectionBase*, uint32_t> > container_type;
   typedef container_type::value_type                             value_type;
@@ -71,13 +73,27 @@ public:
 
   static const uint32_t unlimited = ~uint32_t();
 
-  ChokeManager(ConnectionList* cl, int flags = 0) :
-    m_connectionList(cl),
+  struct heuristics_type {
+    slot_weight         slot_choke_weight;
+    slot_weight         slot_unchoke_weight;
+    
+    uint32_t            choke_weight[order_max_size];
+    uint32_t            unchoke_weight[order_max_size];
+  };
+
+   enum heuristics_enum {
+    HEURISTICS_UPLOAD_LEECH,
+    HEURISTICS_DOWNLOAD_LEECH,
+    //    HEURISTICS_UPLOAD_SEED,
+    HEURISTICS_MAX_SIZE
+  };
+
+  choke_queue(int flags = 0) :
     m_flags(flags),
+    m_heuristics(HEURISTICS_MAX_SIZE),
     m_maxUnchoked(unlimited),
-    m_generousUnchokes(3),
     m_slotConnection(NULL) {}
-  ~ChokeManager();
+  ~choke_queue();
   
   bool                is_full() const                         { return !is_unlimited() && m_unchoked.size() >= m_maxUnchoked; }
   bool                is_unlimited() const                    { return m_maxUnchoked == unlimited; }
@@ -89,27 +105,23 @@ public:
   uint32_t            max_unchoked() const                    { return m_maxUnchoked; }
   void                set_max_unchoked(uint32_t v)            { m_maxUnchoked = v; }
 
-  uint32_t            generous_unchokes() const               { return m_generousUnchokes; }
-  void                set_generous_unchokes(uint32_t v)       { m_generousUnchokes = v; }
-
   void                balance();
   int                 cycle(uint32_t quota);
 
   // Assume interested state is already updated for the PCB and that
   // this gets called once every time the status changes.
-  void                set_queued(PeerConnectionBase* pc, ChokeManagerNode* base);
-  void                set_not_queued(PeerConnectionBase* pc, ChokeManagerNode* base);
+  void                set_queued(PeerConnectionBase* pc, choke_status* base);
+  void                set_not_queued(PeerConnectionBase* pc, choke_status* base);
 
-  void                set_snubbed(PeerConnectionBase* pc, ChokeManagerNode* base);
-  void                set_not_snubbed(PeerConnectionBase* pc, ChokeManagerNode* base);
+  void                set_snubbed(PeerConnectionBase* pc, choke_status* base);
+  void                set_not_snubbed(PeerConnectionBase* pc, choke_status* base);
 
-  void                disconnected(PeerConnectionBase* pc, ChokeManagerNode* base);
+  void                disconnected(PeerConnectionBase* pc, choke_status* base);
 
-  uint32_t*           choke_weight()                           { return m_chokeWeight; }
-  uint32_t*           unchoke_weight()                         { return m_unchokeWeight; }
+  static void         move_connections(choke_queue* src, choke_queue* dest, DownloadMain* download);
 
-  void                set_slot_choke_weight(slot_weight s)     { m_slotChokeWeight = s; }
-  void                set_slot_unchoke_weight(slot_weight s)   { m_slotUnchokeWeight = s; }
+  heuristics_enum     heuristics() const                       { return m_heuristics; }
+  void                set_heuristics(heuristics_enum hs)       { m_heuristics = hs; }
 
   void                set_slot_unchoke(slot_unchoke s)         { m_slotUnchoke = s; }
   void                set_slot_can_unchoke(slot_can_unchoke s) { m_slotCanUnchoke = s; }
@@ -118,41 +130,22 @@ public:
 private:
   inline uint32_t     max_alternate() const;
 
-  uint32_t            choke_range(iterator first, iterator last, uint32_t max);
-  uint32_t            unchoke_range(iterator first, iterator last, uint32_t max);
+  uint32_t            adjust_choke_range(iterator first, iterator last, uint32_t max, bool is_choke);
 
-  ConnectionList*     m_connectionList;
+  static heuristics_type m_heuristics_list[HEURISTICS_MAX_SIZE];
 
   container_type      m_queued;
   container_type      m_unchoked;
 
-  uint32_t            m_chokeWeight[order_max_size];
-  uint32_t            m_unchokeWeight[order_max_size];
-
   int                 m_flags;
+  heuristics_enum     m_heuristics;
 
   uint32_t            m_maxUnchoked;
-  uint32_t            m_generousUnchokes;
-
-  slot_weight         m_slotChokeWeight;
-  slot_weight         m_slotUnchokeWeight;
 
   slot_unchoke        m_slotUnchoke;
   slot_can_unchoke    m_slotCanUnchoke;
   slot_connection     m_slotConnection;
 };
-
-extern uint32_t weights_upload_choke[ChokeManager::order_max_size];
-extern uint32_t weights_upload_unchoke[ChokeManager::order_max_size];
-
-void calculate_upload_choke(ChokeManager::iterator first, ChokeManager::iterator last);
-void calculate_upload_unchoke(ChokeManager::iterator first, ChokeManager::iterator last);
-
-extern uint32_t weights_download_choke[ChokeManager::order_max_size];
-extern uint32_t weights_download_unchoke[ChokeManager::order_max_size];
-
-void calculate_download_choke(ChokeManager::iterator first, ChokeManager::iterator last);
-void calculate_download_unchoke(ChokeManager::iterator first, ChokeManager::iterator last);
 
 }
 
