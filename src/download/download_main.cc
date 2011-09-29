@@ -50,17 +50,19 @@
 #include "torrent/exceptions.h"
 #include "torrent/throttle.h"
 #include "torrent/data/file_list.h"
+#include "torrent/download/download_manager.h"
+#include "torrent/download/choke_queue.h"
 #include "torrent/peer/connection_list.h"
 #include "torrent/peer/peer.h"
 #include "torrent/peer/peer_info.h"
 
 #include "available_list.h"
-#include "choke_manager.h"
 #include "chunk_selector.h"
 #include "chunk_statistics.h"
 #include "download_main.h"
-#include "download_manager.h"
 #include "download_wrapper.h"
+
+namespace std { using namespace tr1; }
 
 namespace torrent {
 
@@ -94,22 +96,14 @@ DownloadMain::DownloadMain() :
   m_downloadThrottle(NULL) {
 
   m_connectionList       = new ConnectionList(this);
-  m_uploadChokeManager   = new ChokeManager(m_connectionList);
-  m_downloadChokeManager = new ChokeManager(m_connectionList, ChokeManager::flag_unchoke_all_new);
+  m_uploadChokeManager   = new choke_queue();
+  m_downloadChokeManager = new choke_queue(choke_queue::flag_unchoke_all_new);
 
-  m_uploadChokeManager->set_slot_choke_weight(&calculate_upload_choke);
-  m_uploadChokeManager->set_slot_unchoke_weight(&calculate_upload_unchoke);
-  m_uploadChokeManager->set_slot_connection(std::mem_fun(&PeerConnectionBase::receive_upload_choke));
+  m_uploadChokeManager->set_heuristics(choke_queue::HEURISTICS_UPLOAD_LEECH);
+  m_uploadChokeManager->set_slot_connection(std::bind(&PeerConnectionBase::receive_upload_choke, std::placeholders::_1, std::placeholders::_2));
 
-  std::memcpy(m_uploadChokeManager->choke_weight(),   weights_upload_choke,   ChokeManager::weight_size_bytes);
-  std::memcpy(m_uploadChokeManager->unchoke_weight(), weights_upload_unchoke, ChokeManager::weight_size_bytes);
-
-  m_downloadChokeManager->set_slot_choke_weight(&calculate_download_choke);
-  m_downloadChokeManager->set_slot_unchoke_weight(&calculate_download_unchoke);
-  m_downloadChokeManager->set_slot_connection(std::mem_fun(&PeerConnectionBase::receive_download_choke));
-
-  std::memcpy(m_downloadChokeManager->choke_weight(),   weights_download_choke,   ChokeManager::weight_size_bytes);
-  std::memcpy(m_downloadChokeManager->unchoke_weight(), weights_download_unchoke, ChokeManager::weight_size_bytes);
+  m_downloadChokeManager->set_heuristics(choke_queue::HEURISTICS_DOWNLOAD_LEECH);
+  m_downloadChokeManager->set_slot_connection(std::bind(&PeerConnectionBase::receive_download_choke, std::placeholders::_1, std::placeholders::_2));
 
   m_delegator.slot_chunk_find(rak::make_mem_fun(m_chunkSelector, &ChunkSelector::find));
   m_delegator.slot_chunk_size(rak::make_mem_fun(file_list(), &FileList::chunk_index_size));
@@ -208,6 +202,8 @@ void DownloadMain::start() {
     throw internal_error("Tried to start an active download");
 
   info()->set_flags(DownloadInfo::flag_active);
+  chunk_list()->set_flags(ChunkList::flag_active);
+
   m_lastConnectedSize = 0;
 
   m_delegator.set_aggressive(false);
@@ -224,6 +220,7 @@ DownloadMain::stop() {
   // Set this early so functions like receive_connect_peers() knows
   // not to eat available peers.
   info()->unset_flags(DownloadInfo::flag_active);
+  chunk_list()->unset_flags(ChunkList::flag_active);
 
   m_slotStopHandshakes(this);
   connection_list()->erase_remaining(connection_list()->begin(), ConnectionList::disconnect_available);
@@ -249,21 +246,27 @@ DownloadMain::initial_seeding_done(PeerConnectionBase* pcb) {
   if (m_initialSeeding == NULL)
     throw internal_error("DownloadMain::initial_seeding_done called when not initial seeding.");
 
-  // Close all connections but the currently active one (pcb).
-  // That one will be closed by throw close_connection() later.
-  if (m_connectionList->size() > 1) {
-    ConnectionList::iterator itr = std::find(m_connectionList->begin(), m_connectionList->end(), pcb);
-    if (itr == m_connectionList->end())
-      throw internal_error("DownloadMain::initial_seeding_done could not find current connection.");
+  // Close all connections but the currently active one (pcb), that
+  // one will be closed by throw close_connection() later.
+  //
+  // When calling initial_seed()->new_peer(...) the 'pcb' won't be in
+  // the connection list, so don't treat it as an error. Make sure to
+  // catch close_connection() at the caller of new_peer(...) and just
+  // close the filedesc before proceeding as normal.
+  ConnectionList::iterator pcb_itr = std::find(m_connectionList->begin(), m_connectionList->end(), pcb);
 
-    std::iter_swap(m_connectionList->begin(), itr);
+  if (pcb_itr != m_connectionList->end()) {
+    std::iter_swap(m_connectionList->begin(), pcb_itr);
     m_connectionList->erase_remaining(m_connectionList->begin() + 1, ConnectionList::disconnect_available);
+  } else {
+    m_connectionList->erase_remaining(m_connectionList->begin(), ConnectionList::disconnect_available);
   }
 
   // Switch to normal seeding.
   DownloadManager::iterator itr = manager->download_manager()->find(m_info);
   (*itr)->set_connection_type(Download::CONNECTION_SEED);
   m_connectionList->slot_new_connection(&createPeerConnectionSeed);
+
   delete m_initialSeeding;
   m_initialSeeding = NULL;
 
@@ -280,7 +283,7 @@ DownloadMain::update_endgame() {
 
 void
 DownloadMain::receive_chunk_done(unsigned int index) {
-  ChunkHandle handle = m_chunkList->get(index, false);
+  ChunkHandle handle = m_chunkList->get(index);
 
   if (!handle.is_valid())
     throw storage_error("DownloadState::chunk_done(...) called with an index we couldn't retrieve from storage");

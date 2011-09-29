@@ -50,6 +50,7 @@ namespace torrent {
 
 class ConnectionList;
 class DownloadInfo;
+class DownloadMain;
 
 // Download is safe to copy and destory as it is just a pointer to an
 // internal class.
@@ -164,6 +165,15 @@ public:
   ConnectionType      connection_type() const;
   void                set_connection_type(ConnectionType t);
 
+  typedef enum {
+  } HeuristicType;
+
+  HeuristicType       upload_choke_heuristic() const;
+  void                set_upload_choke_heuristic(HeuristicType t);
+
+  HeuristicType       download_choke_heuristic() const;
+  void                set_download_choke_heuristic(HeuristicType t);
+
   // Call this when you want the modifications of the download priorities
   // in the entries to take effect. It is slightly expensive as it rechecks
   // all the peer bitfields to see if we are still interested.
@@ -172,6 +182,7 @@ public:
   void                add_peer(const sockaddr* addr, int port);
 
   DownloadWrapper*    ptr() { return m_ptr; }
+  DownloadMain*       main();
 
 private:
   DownloadWrapper*    m_ptr;

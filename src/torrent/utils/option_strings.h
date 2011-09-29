@@ -34,55 +34,25 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#ifndef LIBTORRENT_DOWNLOAD_MANAGER_H
-#define LIBTORRENT_DOWNLOAD_MANAGER_H
+#ifndef LIBTORRENT_UTILS_OPTION_STRINGS_H
+#define LIBTORRENT_UTILS_OPTION_STRINGS_H
 
-#include <vector>
+#include <string>
+#include <torrent/common.h>
 
 namespace torrent {
 
-class DownloadWrapper;
-class DownloadInfo;
-class DownloadMain;
-
-class DownloadManager : private std::vector<DownloadWrapper*>{
-public:
-  typedef std::vector<DownloadWrapper*> base_type;
-
-  typedef base_type::value_type value_type;
-  typedef base_type::pointer pointer;
-  typedef base_type::const_pointer const_pointer;
-  typedef base_type::reference reference;
-  typedef base_type::const_reference const_reference;
-  typedef base_type::size_type size_type;
-
-  typedef base_type::iterator iterator;
-  typedef base_type::reverse_iterator reverse_iterator;
-  typedef base_type::const_iterator const_iterator;
-  typedef base_type::const_reverse_iterator const_reverse_iterator;
-
-  using base_type::empty;
-  using base_type::size;
-
-  using base_type::begin;
-  using base_type::end;
-  using base_type::rbegin;
-  using base_type::rend;
-
-  ~DownloadManager() { clear(); }
-
-  iterator            insert(DownloadWrapper* d);
-  iterator            erase(DownloadWrapper* d);
-
-  void                clear();
-
-  iterator            find(const std::string& hash);
-  iterator            find(const HashString& hash);
-  iterator            find(DownloadInfo* info);
-
-  DownloadMain*       find_main(const char* hash);
-  DownloadMain*       find_main_obfuscated(const char* hash);
+enum option_enum {
+  OPTION_CONNECTION_TYPE,
+  OPTION_CHOKE_HEURISTICS,
+  OPTION_IP_FILTER,
+  OPTION_MAX_SIZE
 };
+
+int        option_find_string(option_enum opt_enum, const char* name) LIBTORRENT_EXPORT;
+inline int option_find_string_str(option_enum opt_enum, const std::string& name) { return option_find_string(opt_enum, name.c_str()); }
+
+const char* option_as_string(option_enum opt_enum, int value) LIBTORRENT_EXPORT;
 
 }
 

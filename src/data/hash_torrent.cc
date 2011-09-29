@@ -147,7 +147,7 @@ HashTorrent::queue(bool quick) {
 
     // Need to do increment later if we're going to support resume
     // hashing a quick hashed torrent.
-    ChunkHandle handle = m_chunkList->get(m_position, false);
+    ChunkHandle handle = m_chunkList->get(m_position, ChunkList::get_dont_log);
 
     if (quick) {
       // We're not actually interested in doing any hashing, so just
@@ -160,51 +160,50 @@ HashTorrent::queue(bool quick) {
         throw internal_error("HashTorrent::queue() quick hashing but m_outstanding != 0.");
 
       if (handle.is_valid())
-        return m_chunkList->release(&handle);
+        return m_chunkList->release(&handle, ChunkList::get_dont_log);
       
       if (handle.error_number().is_valid() && handle.error_number().value() != rak::error_number::e_noent)
         return;
 
       m_position++;
       continue;
-
-    } else {
-      // If the error number is not valid, then we've just encountered a
-      // file that hasn't be created/resized. Which means we ignore it
-      // when doing initial hashing.
-      if (handle.error_number().is_valid() && handle.error_number().value() != rak::error_number::e_noent) {
-        if (handle.is_valid())
-          throw internal_error("HashTorrent::queue() error, but handle.is_valid().");
-
-        // We wait for all the outstanding chunks to be checked before
-        // borking completely, else low-memory devices might not be able
-        // to finish the hash check.
-        if (m_outstanding != 0)
-          return;
-
-        // The rest of the outstanding chunks get ignored by
-        // DownloadWrapper::receive_hash_done. Obsolete.
-        clear();
-
-        m_errno = handle.error_number().value();
-
-//         rak::priority_queue_erase(&taskScheduler, &m_delayChecked);
-        rak::priority_queue_insert(&taskScheduler, &m_delayChecked, cachedTime);
-        return;
-      }
-
-      m_position++;
-
-      if (!handle.is_valid() && !handle.error_number().is_valid())
-        throw internal_error("Hash torrent errno == 0.");
-
-      // Missing file, skip the hash check.
-      if (!handle.is_valid())
-        continue;
-
-      m_slotCheck(handle);
-      m_outstanding++;
     }
+
+    // If the error number is not valid, then we've just encountered a
+    // file that hasn't be created/resized. Which means we ignore it
+    // when doing initial hashing.
+    if (handle.error_number().is_valid() && handle.error_number().value() != rak::error_number::e_noent) {
+      if (handle.is_valid())
+        throw internal_error("HashTorrent::queue() error, but handle.is_valid().");
+
+      // We wait for all the outstanding chunks to be checked before
+      // borking completely, else low-memory devices might not be able
+      // to finish the hash check.
+      if (m_outstanding != 0)
+        return;
+
+      // The rest of the outstanding chunks get ignored by
+      // DownloadWrapper::receive_hash_done. Obsolete.
+      clear();
+
+      m_errno = handle.error_number().value();
+
+      //         rak::priority_queue_erase(&taskScheduler, &m_delayChecked);
+      rak::priority_queue_insert(&taskScheduler, &m_delayChecked, cachedTime);
+      return;
+    }
+
+    m_position++;
+
+    if (!handle.is_valid() && !handle.error_number().is_valid())
+      throw internal_error("Hash torrent errno == 0.");
+
+    // Missing file, skip the hash check.
+    if (!handle.is_valid())
+      continue;
+
+    m_slotCheck(handle);
+    m_outstanding++;
   }
 
   if (m_outstanding == 0) {

@@ -49,7 +49,6 @@
 #include "poll.h"
 
 #include "manager.h"
-#include "resource_manager.h"
 
 #include "protocol/handshake_manager.h"
 #include "protocol/peer_factory.h"
@@ -60,6 +59,7 @@
 #include "download/download_manager.h"
 #include "download/download_wrapper.h"
 #include "torrent/peer/connection_list.h"
+#include "torrent/download/resource_manager.h"
 
 namespace torrent {
 
@@ -150,29 +150,12 @@ is_inactive() {
     == manager->download_manager()->end();
 }
 
-ChunkManager*
-chunk_manager() {
-  return manager->chunk_manager();
-}
-
-ClientList*
-client_list() {
-  return manager->client_list();
-}
-
-FileManager* file_manager() { return manager->file_manager(); }
-
-ConnectionManager*
-connection_manager() {
-  return manager->connection_manager();
-}
-
-DhtManager*
-dht_manager() {
-  return manager->dht_manager();
-}
-
-//TaskManager* task_manager() { return manager->task_manager(); }
+ChunkManager*      chunk_manager() { return manager->chunk_manager(); }
+ClientList*        client_list() { return manager->client_list(); }
+FileManager*       file_manager() { return manager->file_manager(); }
+ConnectionManager* connection_manager() { return manager->connection_manager(); }
+DhtManager*        dht_manager() { return manager->dht_manager(); }
+ResourceManager*   resource_manager() { return manager->resource_manager(); }
 
 uint32_t
 total_handshakes() {
@@ -189,71 +172,15 @@ next_timeout() {
     return rak::timer::from_seconds(60).usec();
 }
 
-Throttle*
-down_throttle_global() {
-  return manager->download_throttle();
-}
+Throttle* down_throttle_global() { return manager->download_throttle(); }
+Throttle* up_throttle_global() { return manager->upload_throttle(); }
 
-Throttle*
-up_throttle_global() {
-  return manager->upload_throttle();
-}
+const Rate* down_rate() { return manager->download_throttle()->rate(); }
+const Rate* up_rate() { return manager->upload_throttle()->rate(); }
+const char* version() { return VERSION; }
 
-uint32_t
-currently_unchoked() {
-  return manager->resource_manager()->currently_upload_unchoked();
-}
-
-uint32_t
-max_unchoked() {
-  return manager->resource_manager()->max_upload_unchoked();
-}
-
-void
-set_max_unchoked(uint32_t count) {
-  if (count > (1 << 16))
-    throw input_error("Max unchoked must be between 0 and 2^16.");
-
-  manager->resource_manager()->set_max_upload_unchoked(count);
-}
-
-uint32_t
-download_unchoked() {
-  return manager->resource_manager()->currently_download_unchoked();
-}
-
-uint32_t
-max_download_unchoked() {
-  return manager->resource_manager()->max_download_unchoked();
-}
-
-void
-set_max_download_unchoked(uint32_t count) {
-  if (count > (1 << 16))
-    throw input_error("Max unchoked must be between 0 and 2^16.");
-
-  manager->resource_manager()->set_max_download_unchoked(count);
-}
-
-const Rate*
-down_rate() {
-  return manager->download_throttle()->rate();
-}
-
-const Rate*
-up_rate() {
-  return manager->upload_throttle()->rate();
-}
-
-const char*
-version() {
-  return VERSION;
-}
-
-uint32_t
-hash_read_ahead() {
-  return manager->hash_queue()->read_ahead();
-}
+uint32_t hash_queue_size() { return manager->hash_queue()->size(); }
+uint32_t hash_read_ahead() { return manager->hash_queue()->read_ahead(); }
 
 void
 set_hash_read_ahead(uint32_t bytes) {
@@ -361,7 +288,7 @@ download_priority(Download d) {
   if (itr == manager->resource_manager()->end())
     throw internal_error("torrent::download_priority(...) could not find the download in the resource manager.");
 
-  return itr->first;
+  return itr->priority();
 }
 
 void

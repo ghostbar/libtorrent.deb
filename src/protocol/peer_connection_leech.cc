@@ -41,12 +41,12 @@
 #include <rak/string_manip.h>
 
 #include "data/chunk_list_node.h"
-#include "download/choke_manager.h"
 #include "download/chunk_selector.h"
 #include "download/chunk_statistics.h"
 #include "download/download_main.h"
 #include "torrent/dht_manager.h"
 #include "torrent/download_info.h"
+#include "torrent/download/choke_queue.h"
 #include "torrent/peer/connection_list.h"
 #include "torrent/peer/peer_info.h"
 
@@ -68,15 +68,12 @@ template<Download::ConnectionType type>
 void
 PeerConnection<type>::initialize_custom() {
   if (type == Download::CONNECTION_INITIAL_SEED) {
-    if (m_download->initial_seeding() == NULL) {
-      // Can't throw close_connection or network_error here, we're still
-      // initializing. So close the socket and let that kill it later.
-      get_fd().close();
-      return;
-    }
+    if (m_download->initial_seeding() == NULL)
+      throw close_connection();
 
     m_download->initial_seeding()->new_peer(this);
   }
+
 //   if (m_download->content()->chunks_completed() != 0) {
 //     m_up->write_bitfield(m_download->file_list()->bitfield()->size_bytes());
 
@@ -216,6 +213,8 @@ PeerConnection<type>::read_message() {
     // Which needs to be done before, and which after calling choke
     // manager?
     m_downUnchoked = false;
+
+    down_chunk_release();
 
     download_queue()->cancel();
     m_download->download_choke_manager()->set_not_queued(this, &m_downChoke);

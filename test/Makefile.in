@@ -55,6 +55,8 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__EXEEXT_1 = LibTorrentTest$(EXEEXT)
 am_LibTorrentTest_OBJECTS = LibTorrentTest-allocators_test.$(OBJEXT) \
+	LibTorrentTest-ranges_test.$(OBJEXT) \
+	LibTorrentTest-extents_test.$(OBJEXT) \
 	LibTorrentTest-object_test.$(OBJEXT) \
 	LibTorrentTest-object_test_utils.$(OBJEXT) \
 	LibTorrentTest-object_static_map_test.$(OBJEXT) \
@@ -117,6 +119,7 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
+DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
@@ -145,6 +148,7 @@ LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 NM = @NM@
 NMEDIT = @NMEDIT@
@@ -177,6 +181,7 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
@@ -231,6 +236,10 @@ LibTorrentTest_LDADD = \
 LibTorrentTest_SOURCES = \
 	rak/allocators_test.cc \
 	rak/allocators_test.h \
+	rak/ranges_test.cc \
+	rak/ranges_test.h \
+	torrent/extents_test.cc \
+	torrent/extents_test.h \
 	torrent/object_test.cc \
 	torrent/object_test.h \
 	torrent/object_test_utils.cc \
@@ -298,11 +307,13 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-allocators_test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-extents_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-object_static_map_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-object_stream_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-object_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-object_test_utils.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-ranges_test.Po@am__quote@
 
 .cc.o:
 @am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -338,6 +349,34 @@ LibTorrentTest-allocators_test.obj: rak/allocators_test.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='rak/allocators_test.cc' object='LibTorrentTest-allocators_test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-allocators_test.obj `if test -f 'rak/allocators_test.cc'; then $(CYGPATH_W) 'rak/allocators_test.cc'; else $(CYGPATH_W) '$(srcdir)/rak/allocators_test.cc'; fi`
+
+LibTorrentTest-ranges_test.o: rak/ranges_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-ranges_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-ranges_test.Tpo -c -o LibTorrentTest-ranges_test.o `test -f 'rak/ranges_test.cc' || echo '$(srcdir)/'`rak/ranges_test.cc
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-ranges_test.Tpo $(DEPDIR)/LibTorrentTest-ranges_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='rak/ranges_test.cc' object='LibTorrentTest-ranges_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-ranges_test.o `test -f 'rak/ranges_test.cc' || echo '$(srcdir)/'`rak/ranges_test.cc
+
+LibTorrentTest-ranges_test.obj: rak/ranges_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-ranges_test.obj -MD -MP -MF $(DEPDIR)/LibTorrentTest-ranges_test.Tpo -c -o LibTorrentTest-ranges_test.obj `if test -f 'rak/ranges_test.cc'; then $(CYGPATH_W) 'rak/ranges_test.cc'; else $(CYGPATH_W) '$(srcdir)/rak/ranges_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-ranges_test.Tpo $(DEPDIR)/LibTorrentTest-ranges_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='rak/ranges_test.cc' object='LibTorrentTest-ranges_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-ranges_test.obj `if test -f 'rak/ranges_test.cc'; then $(CYGPATH_W) 'rak/ranges_test.cc'; else $(CYGPATH_W) '$(srcdir)/rak/ranges_test.cc'; fi`
+
+LibTorrentTest-extents_test.o: torrent/extents_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-extents_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-extents_test.Tpo -c -o LibTorrentTest-extents_test.o `test -f 'torrent/extents_test.cc' || echo '$(srcdir)/'`torrent/extents_test.cc
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-extents_test.Tpo $(DEPDIR)/LibTorrentTest-extents_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/extents_test.cc' object='LibTorrentTest-extents_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-extents_test.o `test -f 'torrent/extents_test.cc' || echo '$(srcdir)/'`torrent/extents_test.cc
+
+LibTorrentTest-extents_test.obj: torrent/extents_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-extents_test.obj -MD -MP -MF $(DEPDIR)/LibTorrentTest-extents_test.Tpo -c -o LibTorrentTest-extents_test.obj `if test -f 'torrent/extents_test.cc'; then $(CYGPATH_W) 'torrent/extents_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/extents_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-extents_test.Tpo $(DEPDIR)/LibTorrentTest-extents_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/extents_test.cc' object='LibTorrentTest-extents_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-extents_test.obj `if test -f 'torrent/extents_test.cc'; then $(CYGPATH_W) 'torrent/extents_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/extents_test.cc'; fi`
 
 LibTorrentTest-object_test.o: torrent/object_test.cc
 @am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-object_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-object_test.Tpo -c -o LibTorrentTest-object_test.o `test -f 'torrent/object_test.cc' || echo '$(srcdir)/'`torrent/object_test.cc
