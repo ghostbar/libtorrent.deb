@@ -1,11 +1,14 @@
-libtorrent (0.12.9-1) UNRELEASED; urgency=low
+libtorrent (0.12.9-1) unstable; urgency=low
 
+  * Imported Upstream version 0.12.9.
   * debian/README.source: Document the preparation of the package.
-  * Imported Upstream version 0.12.9
-  * debian/patches: Refresh patches.
-  * debian/patches: Disable 561232.patch.
+  * debian/patches:
+    + Refresh patches.
+    + Disable 561232.patch.
+    + Disable the IPv6 patch. Breaks systems with IPv4 only and breaks
+      compilation.
 
- -- Rogério Brito <rbrito@ime.usp.br>  Thu, 29 Sep 2011 20:40:50 -0300
+ -- Rogério Brito <rbrito@ime.usp.br>  Thu, 29 Sep 2011 20:56:31 -0300
 
 libtorrent (0.12.7-6) unstable; urgency=low
 
