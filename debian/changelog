@@ -1,3 +1,9 @@
+libtorrent (0.12.9-2) unstable; urgency=low
+
+  * Rename libtorrent13.{dirs,install} to libtorrent14.{dirs,install}
+
+ -- Rogério Brito <rbrito@ime.usp.br>  Thu, 29 Sep 2011 21:40:57 -0300
+
 libtorrent (0.12.9-1) unstable; urgency=low
 
   * Imported Upstream version 0.12.9.
