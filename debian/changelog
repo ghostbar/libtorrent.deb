@@ -1,3 +1,11 @@
+libtorrent (0.12.9-3) unstable; urgency=medium
+
+  * Urgency medium due to RC bugfix. Closes: #644031.
+  * debian/patches: Fix compilation with IPv6. Closes: #490277.
+    Thanks to Steinar H. Gunderson.
+
+ -- Rogério Brito <rbrito@ime.usp.br>  Thu, 13 Oct 2011 13:54:16 -0300
+
 libtorrent (0.12.9-2) unstable; urgency=low
 
   * Rename libtorrent13.{dirs,install} to libtorrent14.{dirs,install}
