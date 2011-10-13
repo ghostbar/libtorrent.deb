@@ -1,7 +1,7 @@
 Description: Implement IPv6 for libtorrent
 Author: "Steinar H. Gunderson" <sesse@debian.org>
 Reviewed-By: Rogério Theodoro de Brito <rbrito@ime.usp.br>
-Last-Updated: 2011-03-20
+Last-Updated: 2011-10-13
 
 --- a/rak/socket_address.h
 +++ b/rak/socket_address.h
@@ -353,7 +353,16 @@ Last-Updated: 2011-03-20
        // If it's not a valid bencode dictionary at all, it's probably not a DHT
 --- a/src/torrent/download_info.h
 +++ b/src/torrent/download_info.h
-@@ -204,6 +204,28 @@
+@@ -45,6 +45,8 @@
+ #include <torrent/rate.h>
+ #include <torrent/hash_string.h>
+ 
++#include <rak/socket_address.h>
++
+ namespace torrent {
+ 
+ class FileList;
+@@ -204,6 +206,28 @@
    mutable signal_chunk_type   m_signalChunkFailed;
  };
  
