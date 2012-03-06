@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -162,6 +162,11 @@ HashQueue::work() {
       return priority_queue_insert(&taskScheduler, &m_taskWork, cachedTime + m_interval);
     
     m_tries = std::max(0, (int)(m_tries - 2));
+
+    // If we got any XMLRPC calls to handle we need to break
+    // here.
+    if (ThreadBase::global_queue_size() != 0)
+      break;
   }
 
   if (!empty() && !m_taskWork.is_queued())

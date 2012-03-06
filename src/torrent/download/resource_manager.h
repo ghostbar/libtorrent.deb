@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,6 +37,7 @@
 #ifndef LIBTORRENT_PEER_RESOURCE_MANAGER_H
 #define LIBTORRENT_PEER_RESOURCE_MANAGER_H
 
+#include <string>
 #include <vector>
 #include <inttypes.h>
 #include <torrent/common.h>
@@ -54,6 +55,7 @@ namespace torrent {
 
 class choke_group;
 class DownloadMain;
+class Rate;
 class ResourceManager;
 
 class LIBTORRENT_EXPORT resource_manager_entry {
@@ -68,6 +70,9 @@ public:
 
   uint16_t            priority() const   { return m_priority; }
   uint16_t            group() const      { return m_group; }
+
+  const Rate*         up_rate() const;
+  const Rate*         down_rate() const;
 
 protected:
   void                set_priority(uint16_t pri) { m_priority = pri; }
@@ -125,18 +130,20 @@ public:
   void                receive_upload_unchoke(int num);
   void                receive_download_unchoke(int num);
 
-  unsigned int        retrieve_upload_can_unchoke();
-  unsigned int        retrieve_download_can_unchoke();
+  int                 retrieve_upload_can_unchoke();
+  int                 retrieve_download_can_unchoke();
 
   void                receive_tick();
 
 private:
   iterator            insert(const resource_manager_entry& entry);
 
+  void                update_group_iterators();
+  void                validate_group_iterators();
+
   unsigned int        total_weight() const;
 
-  void                balance_upload_unchoked(unsigned int weight);
-  void                balance_download_unchoked(unsigned int weight);
+  int                 balance_unchoked(unsigned int weight, unsigned int max_unchoked, bool is_up);
 
   unsigned int        m_currentlyUploadUnchoked;
   unsigned int        m_currentlyDownloadUnchoked;

@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -86,6 +86,11 @@ DownloadManager::find(const HashString& hash) {
 DownloadManager::iterator
 DownloadManager::find(DownloadInfo* info) {
   return std::find_if(begin(), end(), rak::equal(info, std::mem_fun(&DownloadWrapper::info)));
+}
+
+DownloadManager::iterator
+DownloadManager::find_chunk_list(ChunkList* cl) {
+  return std::find_if(begin(), end(), rak::equal(cl, std::mem_fun(&DownloadWrapper::chunk_list)));
 }
 
 DownloadMain*

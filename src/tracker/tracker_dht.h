@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -45,7 +45,7 @@ namespace torrent {
 
 class TrackerDht : public Tracker {
 public:
-  TrackerDht(TrackerList* parent, const std::string& url);
+  TrackerDht(TrackerList* parent, const std::string& url, int flags);
   ~TrackerDht();
 
   typedef enum {
@@ -56,6 +56,8 @@ public:
 
   static const char* states[];
   
+  static bool         is_allowed();
+
   virtual bool        is_busy() const;
   virtual bool        is_usable() const;
 

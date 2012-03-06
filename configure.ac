@@ -1,11 +1,11 @@
-AC_INIT(libtorrent, 0.12.9, jaris@ifi.uio.no)
+AC_INIT(libtorrent, 0.13.0, jaris@ifi.uio.no)
 
 dnl Find a better way to do this
-AC_DEFINE(PEER_NAME, "-lt0C90-", Identifier that is part of the default peer id)
-AC_DEFINE(PEER_VERSION, "lt\x0C\x90", 4 byte client and version identifier for DHT)
+AC_DEFINE(PEER_NAME, "-lt0D00-", Identifier that is part of the default peer id)
+AC_DEFINE(PEER_VERSION, "lt\x0D\x00", 4 byte client and version identifier for DHT)
 
 LIBTORRENT_CURRENT=14
-LIBTORRENT_REVISION=1
+LIBTORRENT_REVISION=2
 LIBTORRENT_AGE=0
 
 LIBTORRENT_INTERFACE_VERSION_INFO=$LIBTORRENT_CURRENT:$LIBTORRENT_REVISION:$LIBTORRENT_AGE
@@ -56,13 +56,17 @@ TORRENT_WITHOUT_STATFS
 
 CC_ATTRIBUTE_VISIBILITY
 
+ACX_PTHREAD(CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS";
+            LIBS="$PTHREAD_LIBS $LIBS"
+)
+
 AC_ARG_ENABLE(openssl,
   [  --disable-openssl       Don't use OpenSSL's SHA1 implementation.],
   [
     if test "$enableval" = "yes"; then
-      PKG_CHECK_MODULES(OPENSSL, openssl,
-        CXXFLAGS="$CXXFLAGS `pkg-config --cflags openssl`";
-        LIBS="$LIBS -lcrypto `pkg-config --libs-only-L --libs-only-other openssl`")
+      PKG_CHECK_MODULES(OPENSSL, libcrypto,
+        CXXFLAGS="$CXXFLAGS $OPENSSL_CFLAGS";
+        LIBS="$LIBS $OPENSSL_LIBS")
 
       AC_DEFINE(USE_OPENSSL, 1, Using OpenSSL.)
       AC_DEFINE(USE_OPENSSL_SHA, 1, Using OpenSSL's SHA1 implementation.)
@@ -70,12 +74,21 @@ AC_ARG_ENABLE(openssl,
       AC_DEFINE(USE_NSS_SHA, 1, Using Mozilla's SHA1 implementation.)
     fi
   ],[
-    PKG_CHECK_MODULES(OPENSSL, openssl,
-      CXXFLAGS="$CXXFLAGS `pkg-config --cflags openssl`";
-      LIBS="$LIBS -lcrypto `pkg-config --libs-only-L --libs-only-other openssl`")
+    PKG_CHECK_MODULES(OPENSSL, libcrypto,
+      CXXFLAGS="$CXXFLAGS $OPENSSL_CFLAGS";
+      LIBS="$LIBS $OPENSSL_LIBS")
 
     AC_DEFINE(USE_OPENSSL, 1, Using OpenSSL.)
     AC_DEFINE(USE_OPENSSL_SHA, 1, Using OpenSSL's SHA1 implementation.)
+  ]
+)
+
+AC_ARG_ENABLE(cyrus-rc4,
+  [  --enable-cyrus-rc4=PFX  Use Cyrus RC4 implementation.],
+  [
+    CXXFLAGS="$CXXFLAGS -I${enableval}/include";
+    LIBS="$LIBS -lrc4 -L${enableval}/lib"
+    AC_DEFINE(USE_CYRUS_RC4, 1, Using Cyrus RC4 implementation.)
   ]
 )
 
@@ -87,6 +100,7 @@ AC_CHECK_FUNCS(posix_memalign)
 
 TORRENT_CHECK_MADVISE()
 TORRENT_CHECK_CACHELINE()
+TORRENT_CHECK_POPCOUNT()
 TORRENT_MINCORE()
 TORRENT_OTFD()
 

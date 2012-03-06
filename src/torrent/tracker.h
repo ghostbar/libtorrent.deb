@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -57,15 +57,36 @@ public:
     TRACKER_DHT,
   } Type;
 
+  enum tracker_event {
+    EVENT_NONE,
+    EVENT_COMPLETED,
+    EVENT_STARTED,
+    EVENT_STOPPED,
+    EVENT_SCRAPE
+  };
+
+  static const int flag_enabled = 0x1;
+  static const int flag_extra_tracker = 0x2;
+  static const int flag_can_scrape = 0x4;
+
+  static const int max_flag_size   = 0x10;
+  static const int mask_base_flags = 0x10 - 1;
+
   virtual ~Tracker() {}
 
-  virtual bool        is_busy() const = 0;
-  bool                is_enabled() const                    { return m_enabled; }
-  virtual bool        is_usable() const                     { return m_enabled; }
+  int                 flags() const { return m_flags; }
 
-  void                enable()                              { m_enabled = true; }
-  void                disable()                             { m_enabled = false; }
-  void                set_enabled(bool status)              { m_enabled = status; }
+  bool                is_enabled() const        { return (m_flags & flag_enabled); }
+  bool                is_extra_tracker() const  { return (m_flags & flag_extra_tracker); }
+  bool                is_in_use() const         { return is_enabled() && m_success_counter != 0; }
+
+  virtual bool        is_busy() const = 0;
+  virtual bool        is_usable() const { return is_enabled(); }
+
+  bool                can_request_state() const;
+
+  void                enable();
+  void                disable();
 
   TrackerList*        parent()                              { return m_parent; }
 
@@ -75,49 +96,86 @@ public:
   const std::string&  url() const                           { return m_url; }
   void                set_url(const std::string& url)       { m_url = url; }
 
-  const std::string&  tracker_id() const                    { return m_trackerId; }
-  void                set_tracker_id(const std::string& id) { m_trackerId = id; }
+  const std::string&  tracker_id() const                    { return m_tracker_id; }
+  void                set_tracker_id(const std::string& id) { m_tracker_id = id; }
 
-  uint32_t            normal_interval() const               { return m_normalInterval; }
-  uint32_t            min_interval() const                  { return m_minInterval; }
+  uint32_t            normal_interval() const               { return m_normal_interval; }
+  uint32_t            min_interval() const                  { return m_min_interval; }
 
-  uint32_t            scrape_time_last() const              { return m_scrapeTimeLast; }
-  uint32_t            scrape_complete() const               { return m_scrapeComplete; }
-  uint32_t            scrape_incomplete() const             { return m_scrapeIncomplete; }
-  uint32_t            scrape_downloaded() const             { return m_scrapeDownloaded; }
+  int                 latest_event() const                  { return m_latest_event; }
+  uint32_t            latest_new_peers() const              { return m_latest_new_peers; }
+  uint32_t            latest_sum_peers() const              { return m_latest_sum_peers; }
+
+  uint32_t            success_time_last() const             { return m_success_time_last; }
+  uint32_t            success_counter() const               { return m_success_counter; }
+
+  uint32_t            failed_time_last() const              { return m_failed_time_last; }
+  uint32_t            failed_counter() const                { return m_failed_counter; }
+
+  uint32_t            activity_time_last() const            { return failed_counter() ? m_failed_time_last : m_success_time_last; }
+  uint32_t            success_time_next() const;
+  uint32_t            failed_time_next() const;
+
+  uint32_t            scrape_time_last() const              { return m_scrape_time_last; }
+  uint32_t            scrape_counter() const                { return m_scrape_counter; }
+
+  uint32_t            scrape_complete() const               { return m_scrape_complete; }
+  uint32_t            scrape_incomplete() const             { return m_scrape_incomplete; }
+  uint32_t            scrape_downloaded() const             { return m_scrape_downloaded; }
 
   virtual void        get_status(char* buffer, int length)  { buffer[0] = 0; } 
 
+  static std::string  scrape_url_from(std::string url);
+
 protected:
-  Tracker(TrackerList* parent, const std::string& url);
+  Tracker(TrackerList* parent, const std::string& url, int flags = 0);
   Tracker(const Tracker& t);
   void operator = (const Tracker& t);
 
   virtual void        send_state(int state) = 0;
+  virtual void        send_scrape();
   virtual void        close() = 0;
+
+  void                clear_stats();
 
   void                set_group(uint32_t v)                 { m_group = v; }
 
-  void                set_normal_interval(int v)            { if (v >= 60 && v <= 3600) m_normalInterval = v; }
-  void                set_min_interval(int v)               { if (v >= 0 && v <= 600)   m_minInterval = v; }
+  void                set_normal_interval(int v)            { if (v >= 600 && v <= 3600) m_normal_interval = v; }
+  void                set_min_interval(int v)               { if (v >= 300 && v <= 1800) m_min_interval = v; }
 
-  bool                m_enabled;
+  int                 m_flags;
 
   TrackerList*        m_parent;
   uint32_t            m_group;
 
   std::string         m_url;
+  std::string         m_tracker_id;
 
-  std::string         m_trackerId;
+  uint32_t            m_normal_interval;
+  uint32_t            m_min_interval;
 
-  uint32_t            m_normalInterval;
-  uint32_t            m_minInterval;
+  int                 m_latest_event;
+  uint32_t            m_latest_new_peers;
+  uint32_t            m_latest_sum_peers;
 
-  uint32_t            m_scrapeTimeLast;
-  uint32_t            m_scrapeComplete;
-  uint32_t            m_scrapeIncomplete;
-  uint32_t            m_scrapeDownloaded;
+  uint32_t            m_success_time_last;
+  uint32_t            m_success_counter;
+
+  uint32_t            m_failed_time_last;
+  uint32_t            m_failed_counter;
+
+  uint32_t            m_scrape_time_last;
+  uint32_t            m_scrape_counter;
+
+  uint32_t            m_scrape_complete;
+  uint32_t            m_scrape_incomplete;
+  uint32_t            m_scrape_downloaded;
 };
+
+inline bool
+Tracker::can_request_state() const {
+  return !(is_busy() && latest_event() != EVENT_SCRAPE) && is_usable();
+}
 
 }
 

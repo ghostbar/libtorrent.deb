@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -41,13 +41,14 @@
 #include <string>
 #include <vector>
 #include <torrent/common.h>
+#include <tr1/functional>
 
 namespace torrent {
 
 class AddressList;
 class DownloadInfo;
+class DownloadWrapper;
 class Tracker;
-class TrackerManager;
 
 // The tracker list will contain a list of tracker, divided into
 // subgroups. Each group must be randomized before we start. When
@@ -58,9 +59,14 @@ class TrackerManager;
 
 class LIBTORRENT_EXPORT TrackerList : private std::vector<Tracker*> {
 public:
-  friend class TrackerManager;
+  friend class DownloadWrapper;
 
   typedef std::vector<Tracker*> base_type;
+  typedef AddressList           address_list;
+
+  typedef std::tr1::function<void (Tracker*)>                     slot_tracker;
+  typedef std::tr1::function<void (Tracker*, const std::string&)> slot_string;
+  typedef std::tr1::function<uint32_t (Tracker*, AddressList*)>   slot_address_list;
 
   using base_type::value_type;
 
@@ -75,21 +81,34 @@ public:
   using base_type::end;
   using base_type::rbegin;
   using base_type::rend;
+  using base_type::front;
+  using base_type::back;
 
   using base_type::at;
   using base_type::operator[];
 
-  TrackerList(TrackerManager* manager);
+  TrackerList();
 
   bool                has_active() const;
   bool                has_usable() const;
 
-  void                close_all();
+  unsigned int        count_active() const;
+  unsigned int        count_usable() const;
+
+  void                close_all() { close_all_excluding(0); }
+  void                close_all_excluding(int event_bitmap);
+
   void                clear();
+  void                clear_stats();
 
-  iterator            insert(unsigned int group, Tracker* t);
+  iterator            insert(unsigned int group, Tracker* tracker);
+  void                insert_url(unsigned int group, const std::string& url, bool extra_tracker = false);
 
-  void                send_state(int s);
+  void                send_state(Tracker* tracker, int new_event);
+  void                send_state_idx(unsigned idx, int new_event);
+  void                send_state_itr(iterator itr, int new_event);
+
+  void                send_scrape(Tracker* tracker);
 
   DownloadInfo*       info()                                  { return m_info; }
   int                 state()                                 { return m_state; }
@@ -101,62 +120,75 @@ public:
   void                set_numwant(int32_t n)                  { m_numwant = n; }
 
   iterator            find(Tracker* tb)                       { return std::find(begin(), end(), tb); }
+  iterator            find_url(const std::string& url);
+
   iterator            find_usable(iterator itr);
   const_iterator      find_usable(const_iterator itr) const;
 
+  iterator            find_next_to_request(iterator itr);
+
   iterator            begin_group(unsigned int group);
   iterator            end_group(unsigned int group)           { return begin_group(group + 1); }
+
+  size_type           size_group() const;
   void                cycle_group(unsigned int group);
 
   iterator            promote(iterator itr);
   void                randomize_group_entries();
 
-  uint32_t            time_next_connection() const;
-  uint32_t            time_last_connection() const            { return m_timeLastConnection; }
-
-  // Some temporary functions that are routed to
-  // TrackerManager... Clean this up.
-  void                send_completed();
-
-  void                manual_request(bool force);
-  void                manual_cancel();
-
-  // Functions for controlling the current focus. They only support
-  // one active tracker atm.
-  iterator            focus()                                 { return m_itr; }
-  const_iterator      focus() const                           { return m_itr; }
-  uint32_t            focus_index() const                     { return m_itr - begin(); }
-
-  bool                focus_next_group();
-
-  uint32_t            focus_normal_interval() const;
-  uint32_t            focus_min_interval() const;
-
   void                receive_success(Tracker* tb, AddressList* l);
   void                receive_failed(Tracker* tb, const std::string& msg);
 
+  void                receive_scrape_success(Tracker* tb);
+  void                receive_scrape_failed(Tracker* tb, const std::string& msg);
+
+  // Used by libtorrent internally.
+  slot_address_list&  slot_success()                          { return m_slot_success; }
+  slot_string&        slot_failure()                          { return m_slot_failed; }
+
+  slot_tracker&       slot_scrape_success()                   { return m_slot_scrape_success; }
+  slot_string&        slot_scrape_failure()                   { return m_slot_scrape_failed; }
+
+  slot_tracker&       slot_tracker_enabled()                  { return m_slot_tracker_enabled; }
+  slot_tracker&       slot_tracker_disabled()                 { return m_slot_tracker_disabled; }
+
 protected:
   void                set_info(DownloadInfo* info)            { m_info = info; }
-  void                set_state(int s)                        { m_state = s; }
 
-  void                set_focus(iterator itr)                 { m_itr = itr; }
-  void                set_time_last_connection(uint32_t v)    { m_timeLastConnection = v; }
+  void                set_state(int s)                        { m_state = s; }
 
 private:
   TrackerList(const TrackerList&) LIBTORRENT_NO_EXPORT;
   void operator = (const TrackerList&) LIBTORRENT_NO_EXPORT;
 
-  TrackerManager*     m_manager;
   DownloadInfo*       m_info;
   int                 m_state;
 
   uint32_t            m_key;
   int32_t             m_numwant;
 
-  uint32_t            m_timeLastConnection;
+  slot_address_list   m_slot_success;
+  slot_string         m_slot_failed;
 
-  iterator            m_itr;
+  slot_tracker        m_slot_scrape_success;
+  slot_string         m_slot_scrape_failed;
+
+  slot_tracker        m_slot_tracker_enabled;
+  slot_tracker        m_slot_tracker_disabled;
 };
+
+inline void
+TrackerList::send_state_idx(unsigned idx, int new_event) {
+  send_state(at(idx), new_event);
+}
+
+inline void
+TrackerList::send_state_itr(iterator itr, int new_event) {
+  if (itr == end())
+    return;
+    
+  send_state(*itr, new_event);
+}
 
 }
 

@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -48,17 +48,21 @@
 #include "protocol/peer_connection_base.h"
 #include "torrent/exceptions.h"
 #include "torrent/object.h"
+#include "torrent/tracker_list.h"
 #include "torrent/data/file.h"
 #include "torrent/data/file_list.h"
 #include "torrent/data/file_manager.h"
 #include "torrent/peer/peer.h"
 #include "torrent/peer/connection_list.h"
-#include "tracker/tracker_manager.h"
+#include "torrent/tracker_controller.h"
+#include "torrent/tracker_list.h"
 
 #include "available_list.h"
 #include "chunk_selector.h"
 
 #include "download_wrapper.h"
+
+namespace std { using namespace tr1; }
 
 namespace torrent {
 
@@ -69,11 +73,11 @@ DownloadWrapper::DownloadWrapper() :
   m_hashChecker(NULL),
   m_connectionType(0) {
 
-  m_main->delay_download_done().set_slot(rak::mem_fn(&info()->signal_download_done(), &Signal::operator()));
+  m_main->delay_download_done().set_slot(rak::mem_fn(data(), &download_data::call_download_done));
 
-  m_main->tracker_manager()->set_info(info());
-  m_main->tracker_manager()->slot_success(rak::make_mem_fun(this, &DownloadWrapper::receive_tracker_success));
-  m_main->tracker_manager()->slot_failed(rak::make_mem_fun(this, &DownloadWrapper::receive_tracker_failed));
+  m_main->tracker_list()->set_info(info());
+  m_main->tracker_controller()->slot_success() = std::bind(&DownloadWrapper::receive_tracker_success, this, std::placeholders::_1);
+  m_main->tracker_controller()->slot_failure() = std::bind(&DownloadWrapper::receive_tracker_failed, this, std::placeholders::_1);
 
   m_main->chunk_list()->slot_storage_error(rak::make_mem_fun(this, &DownloadWrapper::receive_storage_error));
 }
@@ -87,7 +91,7 @@ DownloadWrapper::~DownloadWrapper() {
 
   // If the client wants to do a quick cleanup after calling close, it
   // will need to manually cancel the tracker requests.
-  m_main->tracker_manager()->close();
+  m_main->tracker_controller()->close();
 
   delete m_hashChecker;
   delete m_bencode;
@@ -142,7 +146,7 @@ DownloadWrapper::close() {
 
 bool
 DownloadWrapper::is_stopped() const {
-  return !m_main->tracker_manager()->is_active() && !m_main->tracker_manager()->is_busy();
+  return !m_main->tracker_controller()->is_active() && !m_main->tracker_list()->has_active();
 }
 
 void
@@ -161,11 +165,12 @@ DownloadWrapper::receive_initial_hash() {
 
     // Initialize the ChunkSelector here so that no chunks will be
     // marked by HashTorrent that are not accounted for.
-    m_main->chunk_selector()->initialize(m_main->file_list()->mutable_bitfield(), m_main->chunk_statistics());
+    m_main->chunk_selector()->initialize(m_main->chunk_statistics());
     receive_update_priorities();
   }
 
-  info()->signal_initial_hash().emit();
+  if (data()->slot_initial_hash())
+    data()->slot_initial_hash()();
 }    
 
 void
@@ -200,7 +205,7 @@ DownloadWrapper::receive_hash_done(ChunkHandle handle, const char* hash) {
     // Receiving chunk hashes after stopping the torrent should be
     // safe.
 
-    if (m_main->chunk_selector()->bitfield()->get(handle.index()))
+    if (data()->untouched_bitfield()->get(handle.index()))
       throw internal_error("DownloadWrapper::receive_hash_done(...) received a chunk that isn't set in ChunkSelector.");
 
     if (std::memcmp(hash, chunk_hash(handle.index()), 20) == 0) {
@@ -239,19 +244,20 @@ DownloadWrapper::receive_storage_error(const std::string& str) {
   m_main->stop();
   close();
 
-  m_main->tracker_manager()->set_active(false);
-  m_main->tracker_manager()->close();
+  m_main->tracker_controller()->disable();
+  m_main->tracker_controller()->close();
 
   info()->signal_storage_error().emit(str);
 }
 
-void
+uint32_t
 DownloadWrapper::receive_tracker_success(AddressList* l) {
-  m_main->peer_list()->insert_available(l);
+  uint32_t inserted = m_main->peer_list()->insert_available(l);
   m_main->receive_connect_peers();
   m_main->receive_tracker_success();
 
   info()->signal_tracker_success().emit();
+  return inserted;
 }
 
 void
@@ -307,8 +313,8 @@ DownloadWrapper::receive_update_priorities() {
   if (m_main->chunk_selector()->empty())
     return;
 
-  m_main->chunk_selector()->high_priority()->clear();
-  m_main->chunk_selector()->normal_priority()->clear();
+  data()->mutable_high_priority()->clear();
+  data()->mutable_normal_priority()->clear();
 
   for (FileList::iterator itr = m_main->file_list()->begin(); itr != m_main->file_list()->end(); ++itr) {
     switch ((*itr)->priority()) {
@@ -317,30 +323,36 @@ DownloadWrapper::receive_update_priorities() {
       File::range_type range = (*itr)->range();
 
       if ((*itr)->has_flags(File::flag_prioritize_first) && range.first != range.second) {
-        m_main->chunk_selector()->high_priority()->insert(range.first, range.first + 1);
+        data()->mutable_high_priority()->insert(range.first, range.first + 1);
         range.first++;
       }
 
       if ((*itr)->has_flags(File::flag_prioritize_last) && range.first != range.second) {
-        m_main->chunk_selector()->high_priority()->insert(range.second - 1, range.second);
+        data()->mutable_high_priority()->insert(range.second - 1, range.second);
         range.second--;
       }
 
-      m_main->chunk_selector()->normal_priority()->insert(range);
+      data()->mutable_normal_priority()->insert(range);
       break;
     }
     case PRIORITY_HIGH:
-      m_main->chunk_selector()->high_priority()->insert((*itr)->range().first, (*itr)->range().second);
+      data()->mutable_high_priority()->insert((*itr)->range().first, (*itr)->range().second);
       break;
     default:
       break;
     }
   }
 
+  data()->update_wanted_chunks();
+
   m_main->chunk_selector()->update_priorities();
 
   std::for_each(m_main->connection_list()->begin(), m_main->connection_list()->end(),
                 rak::on(std::mem_fun(&Peer::m_ptr), std::mem_fun(&PeerConnectionBase::update_interested)));
+
+  // TODO: Trigger event if this results in the torrent being
+  // partially finished, or going from partially finished to needing
+  // to download more.
 }
 
 void

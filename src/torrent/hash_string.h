@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -104,9 +104,11 @@ private:
 };
 
 const char* hash_string_from_hex_c_str(const char* first, HashString& hash) LIBTORRENT_EXPORT;
-const char* hash_string_to_hex(const HashString& hash, char* first) LIBTORRENT_EXPORT;
+char* hash_string_to_hex(const HashString& hash, char* first) LIBTORRENT_EXPORT;
 
 std::string hash_string_to_hex_str(const HashString& hash) LIBTORRENT_EXPORT;
+
+inline const char* hash_string_to_hex_first(const HashString& hash, char* first) { hash_string_to_hex(hash, first); return first; }
 
 inline bool
 operator == (const HashString& one, const HashString& two) {

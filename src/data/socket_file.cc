@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -158,7 +158,7 @@ SocketFile::create_chunk(uint64_t offset, uint32_t length, int prot, int flags) 
 
   // For some reason mapping beyond the extent of the file does not
   // cause mmap to complain, so we need to check manually here.
-  if (offset < 0 || length == 0 || offset > size() || offset + length > size())
+  if (length == 0 || offset > size() || offset + length > size())
     return MemoryChunk();
 
   uint64_t align = offset % MemoryChunk::page_size();

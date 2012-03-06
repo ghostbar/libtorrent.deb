@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -40,10 +40,10 @@
 #include <string>
 #include <inttypes.h>
 #include <rak/functional.h>
-#include <rak/ranges.h>
 #include <rak/priority_queue_default.h>
 
 #include "data/chunk_handle.h"
+#include "torrent/utils/ranges.h"
 
 namespace torrent {
 
@@ -52,7 +52,7 @@ class DownloadWrapper;
 
 class HashTorrent {
 public:
-  typedef rak::ranges<uint32_t> Ranges;
+  typedef ranges<uint32_t> Ranges;
 
   typedef rak::mem_fun1<DownloadWrapper, void, ChunkHandle>        slot_check_type;
   typedef rak::mem_fun1<DownloadWrapper, void, const std::string&> slot_error_type;
@@ -68,7 +68,7 @@ public:
 
   void                confirm_checked();
 
-  Ranges&             ranges()                               { return m_ranges; }
+  Ranges&             hashing_ranges()                       { return m_ranges; }
   uint32_t            position() const                       { return m_position; }
   uint32_t            outstanding() const                    { return m_outstanding; }
 

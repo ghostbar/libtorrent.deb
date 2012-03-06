@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -40,6 +40,7 @@
 #include <vector>
 #include <torrent/common.h>
 #include <torrent/data/block_transfer.h>
+#include <cstdlib>
 
 namespace torrent {
 

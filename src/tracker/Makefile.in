@@ -37,7 +37,8 @@ host_triplet = @host@
 subdir = src/tracker
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/scripts/attributes.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/scripts/acx_pthread.m4 \
+	$(top_srcdir)/scripts/attributes.m4 \
 	$(top_srcdir)/scripts/checks.m4 \
 	$(top_srcdir)/scripts/common.m4 \
 	$(top_srcdir)/scripts/libtool.m4 \
@@ -55,7 +56,7 @@ CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
 libsub_tracker_la_LIBADD =
 am_libsub_tracker_la_OBJECTS = tracker_dht.lo tracker_http.lo \
-	tracker_manager.lo tracker_udp.lo
+	tracker_udp.lo
 libsub_tracker_la_OBJECTS = $(am_libsub_tracker_la_OBJECTS)
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
@@ -156,6 +157,9 @@ PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
+PTHREAD_CC = @PTHREAD_CC@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+PTHREAD_LIBS = @PTHREAD_LIBS@
 RANLIB = @RANLIB@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
@@ -172,6 +176,7 @@ ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
+acx_pthread_config = @acx_pthread_config@
 am__include = @am__include@
 am__leading_dot = @am__leading_dot@
 am__quote = @am__quote@
@@ -223,8 +228,6 @@ libsub_tracker_la_SOURCES = \
 	tracker_dht.h \
 	tracker_http.cc \
 	tracker_http.h \
-	tracker_manager.cc \
-	tracker_manager.h \
 	tracker_udp.cc \
 	tracker_udp.h
 
@@ -283,7 +286,6 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracker_dht.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracker_http.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracker_manager.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracker_udp.Plo@am__quote@
 
 .cc.o:

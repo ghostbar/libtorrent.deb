@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -49,6 +49,7 @@
 #include "download/available_list.h"
 #include "net/data_buffer.h"
 #include "torrent/download_info.h"
+#include "torrent/download/group_entry.h"
 #include "torrent/data/file_list.h"
 #include "torrent/peer/peer_list.h"
 
@@ -58,11 +59,12 @@ class ChunkList;
 class ChunkSelector;
 class ChunkStatistics;
 
-class choke_queue;
+class choke_group;
 class ConnectionList;
 class DownloadWrapper;
 class HandshakeManager;
-class TrackerManager;
+class TrackerController;
+class TrackerList;
 class DownloadInfo;
 class ThrottleList;
 class InitialSeeding;
@@ -81,11 +83,12 @@ public:
   void                start();
   void                stop();
 
-  choke_queue*        upload_choke_manager()                     { return m_uploadChokeManager; }
-  const choke_queue*  c_upload_choke_manager() const             { return m_uploadChokeManager; }
-  choke_queue*        download_choke_manager()                   { return m_downloadChokeManager; }
-  const choke_queue*  c_download_choke_manager() const           { return m_downloadChokeManager; }
-  TrackerManager*     tracker_manager() const                    { return m_trackerManager; }
+  struct choke_group*       choke_group()                        { return m_choke_group; }
+  const struct choke_group* c_choke_group() const                { return m_choke_group; }
+  void                set_choke_group(struct choke_group* grp)   { m_choke_group = grp; }
+
+  TrackerController*  tracker_controller()                       { return m_tracker_controller; }
+  TrackerList*        tracker_list()                             { return m_tracker_list; }
 
   DownloadInfo*       info()                                     { return m_info; }
 
@@ -113,6 +116,9 @@ public:
 
   ThrottleList*       download_throttle()                        { return m_downloadThrottle; }
   void                set_download_throttle(ThrottleList* t)     { m_downloadThrottle = t; }
+
+  group_entry*        up_group_entry()                           { return &m_up_group_entry; }
+  group_entry*        down_group_entry()                         { return &m_down_group_entry; }
 
   DataBuffer          get_ut_pex(bool initial)                   { return (initial ? m_ut_pex_initial : m_ut_pex_delta).clone(); }
 
@@ -150,8 +156,11 @@ public:
 
   void                update_endgame();
 
+  rak::priority_item& delay_download_done()       { return m_delay_download_done; }
+  rak::priority_item& delay_partially_done()      { return m_delay_partially_done; }
+  rak::priority_item& delay_partially_restarted() { return m_delay_partially_restarted; }
+
   rak::priority_item& delay_disconnect_peers() { return m_delayDisconnectPeers; }
-  rak::priority_item& delay_download_done() { return m_delayDownloadDone; }
 
 private:
   // Disable copy ctor and assignment.
@@ -163,9 +172,13 @@ private:
 
   DownloadInfo*       m_info;
 
-  TrackerManager*     m_trackerManager;
-  choke_queue*        m_uploadChokeManager;
-  choke_queue*        m_downloadChokeManager;
+  TrackerController*  m_tracker_controller;
+  TrackerList*        m_tracker_list;
+
+  struct choke_group* m_choke_group;
+
+  group_entry         m_up_group_entry;
+  group_entry         m_down_group_entry;
 
   ChunkList*          m_chunkList;
   ChunkSelector*      m_chunkSelector;
@@ -178,8 +191,6 @@ private:
   ConnectionList*     m_connectionList;
   FileList            m_fileList;
   PeerList            m_peerList;
-
-  uint32_t            m_lastConnectedSize;
 
   DataBuffer          m_ut_pex_delta;
   DataBuffer          m_ut_pex_initial;
@@ -194,7 +205,10 @@ private:
   SlotCountHandshakes m_slotCountHandshakes;
   SlotHashCheckAdd    m_slotHashCheckAdd;
 
-  rak::priority_item  m_delayDownloadDone;
+  rak::priority_item  m_delay_download_done;
+  rak::priority_item  m_delay_partially_done;
+  rak::priority_item  m_delay_partially_restarted;
+
   rak::priority_item  m_delayDisconnectPeers;
   rak::priority_item  m_taskTrackerRequest;
 };

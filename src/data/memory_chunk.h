@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -140,6 +140,9 @@ MemoryChunk::clear() {
 
 inline uint32_t
 MemoryChunk::pages_touched(uint32_t offset, uint32_t length) const {
+  if (length == 0)
+    return 0;
+
   return (length + page_align(offset) + m_pagesize - 1) / m_pagesize;
 }
 

@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -45,16 +45,18 @@
 #include "protocol/initial_seed.h"
 #include "protocol/peer_connection_base.h"
 #include "protocol/peer_factory.h"
-#include "tracker/tracker_manager.h"
 #include "torrent/download.h"
 #include "torrent/exceptions.h"
 #include "torrent/throttle.h"
 #include "torrent/data/file_list.h"
 #include "torrent/download/download_manager.h"
 #include "torrent/download/choke_queue.h"
+#include "torrent/download/choke_group.h"
 #include "torrent/peer/connection_list.h"
 #include "torrent/peer/peer.h"
 #include "torrent/peer/peer_info.h"
+#include "torrent/tracker_controller.h"
+#include "torrent/tracker_list.h"
 
 #include "available_list.h"
 #include "chunk_selector.h"
@@ -67,7 +69,7 @@ namespace std { using namespace tr1; }
 namespace torrent {
 
 DownloadInfo::DownloadInfo() :
-  m_flags(flag_compact | flag_accepting_new_peers | flag_pex_enabled | flag_pex_active),
+  m_flags(flag_compact | flag_accepting_new_peers | flag_accepting_seeders | flag_pex_enabled | flag_pex_active),
 
   m_upRate(60),
   m_downRate(60),
@@ -80,30 +82,34 @@ DownloadInfo::DownloadInfo() :
   m_metadataSize(0),
   
   m_creationDate(0),
-  m_loadDate(rak::timer::current_seconds()) {
+  m_loadDate(rak::timer::current_seconds()),
+
+  m_upload_unchoked(0),
+  m_download_unchoked(0) {
 }
 
 DownloadMain::DownloadMain() :
   m_info(new DownloadInfo),
 
-  m_trackerManager(new TrackerManager()),
+  m_choke_group(NULL),
   m_chunkList(new ChunkList),
-  m_chunkSelector(new ChunkSelector),
+  m_chunkSelector(new ChunkSelector(file_list()->mutable_data())),
   m_chunkStatistics(new ChunkStatistics),
 
   m_initialSeeding(NULL),
   m_uploadThrottle(NULL),
   m_downloadThrottle(NULL) {
 
-  m_connectionList       = new ConnectionList(this);
-  m_uploadChokeManager   = new choke_queue();
-  m_downloadChokeManager = new choke_queue(choke_queue::flag_unchoke_all_new);
+  m_tracker_list = new TrackerList();
+  m_tracker_controller = new TrackerController(m_tracker_list);
 
-  m_uploadChokeManager->set_heuristics(choke_queue::HEURISTICS_UPLOAD_LEECH);
-  m_uploadChokeManager->set_slot_connection(std::bind(&PeerConnectionBase::receive_upload_choke, std::placeholders::_1, std::placeholders::_2));
+  m_tracker_list->slot_success() = std::bind(&TrackerController::receive_success, m_tracker_controller, std::placeholders::_1, std::placeholders::_2);
+  m_tracker_list->slot_failure() = std::bind(&TrackerController::receive_failure, m_tracker_controller, std::placeholders::_1, std::placeholders::_2);
+  m_tracker_list->slot_scrape_success() = std::bind(&TrackerController::receive_scrape, m_tracker_controller, std::placeholders::_1);
+  m_tracker_list->slot_tracker_enabled()  = std::bind(&TrackerController::receive_tracker_enabled, m_tracker_controller, std::placeholders::_1);
+  m_tracker_list->slot_tracker_disabled() = std::bind(&TrackerController::receive_tracker_disabled, m_tracker_controller, std::placeholders::_1);
 
-  m_downloadChokeManager->set_heuristics(choke_queue::HEURISTICS_DOWNLOAD_LEECH);
-  m_downloadChokeManager->set_slot_connection(std::bind(&PeerConnectionBase::receive_download_choke, std::placeholders::_1, std::placeholders::_2));
+  m_connectionList = new ConnectionList(this);
 
   m_delegator.slot_chunk_find(rak::make_mem_fun(m_chunkSelector, &ChunkSelector::find));
   m_delegator.slot_chunk_size(rak::make_mem_fun(file_list(), &FileList::chunk_index_size));
@@ -126,13 +132,13 @@ DownloadMain::~DownloadMain() {
 
   // Check if needed.
   m_connectionList->clear();
+  m_tracker_list->clear();
 
   if (m_info->size_pex() != 0)
     throw internal_error("DownloadMain::~DownloadMain(): m_info->size_pex() != 0.");
 
-  delete m_trackerManager;
-  delete m_uploadChokeManager;
-  delete m_downloadChokeManager;
+  delete m_tracker_controller;
+  delete m_tracker_list;
   delete m_connectionList;
 
   delete m_chunkStatistics;
@@ -184,7 +190,6 @@ DownloadMain::close() {
 
   m_delegator.transfer_list()->clear();
 
-  file_list()->mutable_bitfield()->unallocate();
   file_list()->close();
 
   // Clear the chunklist last as it requires all referenced chunks to
@@ -203,8 +208,6 @@ void DownloadMain::start() {
 
   info()->set_flags(DownloadInfo::flag_active);
   chunk_list()->set_flags(ChunkList::flag_active);
-
-  m_lastConnectedSize = 0;
 
   m_delegator.set_aggressive(false);
   update_endgame();  
@@ -230,6 +233,9 @@ DownloadMain::stop() {
 
   priority_queue_erase(&taskScheduler, &m_delayDisconnectPeers);
   priority_queue_erase(&taskScheduler, &m_taskTrackerRequest);
+
+  if (info()->upload_unchoked() != 0 || info()->download_unchoked() != 0)
+    throw internal_error("DownloadMain::stop(): info()->upload_unchoked() != 0 || info()->download_unchoked() != 0.");
 }
 
 bool
@@ -346,15 +352,12 @@ DownloadMain::receive_tracker_success() {
 
 void
 DownloadMain::receive_tracker_request() {
-  if (connection_list()->size() >= connection_list()->min_size())
+  if (connection_list()->size() + peer_list()->available_list()->size() / 2 >= connection_list()->min_size()) {
+    m_tracker_controller->stop_requesting();
     return;
+  }
 
-  if (m_info->is_pex_enabled() || connection_list()->size() < m_lastConnectedSize + 10)
-    m_trackerManager->request_next();
-  else if (!m_trackerManager->request_current())
-    m_trackerManager->request_next();
-
-  m_lastConnectedSize = connection_list()->size();
+  m_tracker_controller->start_requesting();
 }
 
 struct SocketAddressCompact_less {

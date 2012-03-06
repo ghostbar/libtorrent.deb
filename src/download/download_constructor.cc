@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -46,9 +46,10 @@
 #include "torrent/dht_manager.h"
 #include "torrent/exceptions.h"
 #include "torrent/object.h"
+#include "torrent/tracker_controller.h"
+#include "torrent/tracker_list.h"
 #include "torrent/data/file.h"
 #include "torrent/data/file_list.h"
-#include "tracker/tracker_manager.h"
 
 #include "download_constructor.h"
 
@@ -97,8 +98,6 @@ DownloadConstructor::initialize(Object& b) {
 
   parse_name(b.get_key("info"));
   parse_info(b.get_key("info"));
-
-  parse_tracker(b);
 }
 
 // Currently using a hack of the path thingie to extract the correct
@@ -186,8 +185,6 @@ DownloadConstructor::parse_info(const Object& b) {
 
 void
 DownloadConstructor::parse_tracker(const Object& b) {
-  TrackerManager* tracker = m_download->main()->tracker_manager();
-
   const Object::list_type* announce_list = NULL;
 
   if (b.has_key_list("announce-list") &&
@@ -206,13 +203,13 @@ DownloadConstructor::parse_tracker(const Object& b) {
     throw bencode_error("Could not find any trackers");
 
   if (manager->dht_manager()->is_valid() && !m_download->info()->is_private())
-    tracker->insert(tracker->group_size(), "dht://");
+    m_download->main()->tracker_list()->insert_url(m_download->main()->tracker_list()->size_group(), "dht://");
 
   if (manager->dht_manager()->is_valid() && b.has_key_list("nodes"))
     std::for_each(b.get_key_list("nodes").begin(), b.get_key_list("nodes").end(),
                   rak::make_mem_fun(this, &DownloadConstructor::add_dht_node));
 
-  tracker->randomize();
+  m_download->main()->tracker_list()->randomize_group_entries();
 }
 
 void
@@ -222,7 +219,7 @@ DownloadConstructor::add_tracker_group(const Object& b) {
 
   std::for_each(b.as_list().begin(), b.as_list().end(),
 		rak::bind2nd(rak::make_mem_fun(this, &DownloadConstructor::add_tracker_single),
-			     m_download->main()->tracker_manager()->group_size()));
+			     m_download->main()->tracker_list()->size_group()));
 }
 
 void
@@ -230,7 +227,7 @@ DownloadConstructor::add_tracker_single(const Object& b, int group) {
   if (!b.is_string())
     throw bencode_error("Tracker entry not a string");
     
-  m_download->main()->tracker_manager()->insert(group, rak::trim_classic(b.as_string()));
+  m_download->main()->tracker_list()->insert_url(group, rak::trim_classic(b.as_string()));
 }
 
 void
@@ -344,7 +341,7 @@ DownloadConstructor::create_path(const Object::list_type& plist, const std::stri
     throw input_error("Bad torrent file, \"path\" has zero entries.");
 
   if (std::find_if(plist.begin(), plist.end(), std::ptr_fun(&DownloadConstructor::is_invalid_path_element)) != plist.end())
-    throw input_error("Bad torrent file, \"path\" has zero entries or a zero lenght entry.");
+    throw input_error("Bad torrent file, \"path\" has zero entries or a zero length entry.");
 
   Path p;
   p.set_encoding(enc);

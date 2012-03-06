@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -42,17 +42,32 @@
 
 namespace torrent {
 
+class Object;
+
 enum option_enum {
   OPTION_CONNECTION_TYPE,
   OPTION_CHOKE_HEURISTICS,
+  OPTION_CHOKE_HEURISTICS_DOWNLOAD,
+  OPTION_CHOKE_HEURISTICS_UPLOAD,
+  OPTION_ENCRYPTION,
   OPTION_IP_FILTER,
-  OPTION_MAX_SIZE
+  OPTION_IP_TOS,
+  OPTION_TRACKER_MODE,
+
+  OPTION_LOG_GROUP,
+  OPTION_TRACKER_EVENT,
+
+  OPTION_MAX_SIZE,
+  OPTION_START_COMPACT = OPTION_LOG_GROUP,
+  OPTION_SINGLE_SIZE = OPTION_MAX_SIZE - OPTION_START_COMPACT
 };
 
-int        option_find_string(option_enum opt_enum, const char* name) LIBTORRENT_EXPORT;
-inline int option_find_string_str(option_enum opt_enum, const std::string& name) { return option_find_string(opt_enum, name.c_str()); }
+int             option_find_string(option_enum opt_enum, const char* name) LIBTORRENT_EXPORT;
+inline int      option_find_string_str(option_enum opt_enum, const std::string& name) { return option_find_string(opt_enum, name.c_str()); }
 
-const char* option_as_string(option_enum opt_enum, int value) LIBTORRENT_EXPORT;
+const char*     option_as_string(option_enum opt_enum, unsigned int value) LIBTORRENT_EXPORT;
+
+torrent::Object option_list_strings(option_enum opt_enum) LIBTORRENT_EXPORT;
 
 }
 

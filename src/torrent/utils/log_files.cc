@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -46,6 +46,7 @@
 #include "rak/timer.h"
 #include "log_files.h"
 
+#include "torrent/download/group_entry.h"
 #include "protocol/peer_connection_base.h"
 
 namespace torrent {
@@ -134,8 +135,8 @@ log_mincore_stats_func(bool is_incore, bool new_index, bool& continous) {
                                        log_mincore_stats_instance.counter_sync_not_synced,
                                        log_mincore_stats_instance.counter_sync_not_deallocated,
                                        log_mincore_stats_instance.counter_alloc_failed,
-                                       log_mincore_stats_instance.velocity_allocate,
-                                       log_mincore_stats_instance.velocity_deallocate);
+                                       (long long unsigned int)log_mincore_stats_instance.velocity_allocate,
+                                       (long long unsigned int)log_mincore_stats_instance.velocity_deallocate);
 
     // Add a zero'ed log entry so that graphs will look right after a
     // long period with no activity.
@@ -147,7 +148,7 @@ log_mincore_stats_func(bool is_incore, bool new_index, bool& continous) {
       buf_length += snprintf(buffer + buf_length, 256 - buf_length,
                              "%i 0 0 0 0 0 0 0 0 0 0 0 0\n", rak::timer::current().seconds() / 10 * 10 - 10);
 
-    write(lf->file_descriptor(), buffer, buf_length);
+    int __UNUSED result = write(lf->file_descriptor(), buffer, buf_length);
     
     lf->set_last_update(rak::timer::current().seconds() / 10 * 10);
     std::memset(&log_mincore_stats_instance, 0, sizeof(log_mincore_stats));
@@ -171,19 +172,20 @@ log_choke_changes_func_new(void* address, const char* title, int quota, int adju
   unsigned int buf_length = snprintf(buffer, 256, "%p %i %s %i %i\n",
                                      address, lf->last_update(), title, quota, adjust);
 
-  write(lf->file_descriptor(), buffer, buf_length);
+  int __UNUSED result = write(lf->file_descriptor(), buffer, buf_length);
 }
 
 void
-log_choke_changes_func_peer(void* address, const char* title, std::pair<PeerConnectionBase*, uint32_t> data) {
+log_choke_changes_func_peer(void* address, const char* title, weighted_connection* data) {
   log_file* lf = &log_files[LOG_CHOKE_CHANGES];
 
   char buffer[256];
   unsigned int buf_length = snprintf(buffer, 256, "%p %i %s %p %X %llu %llu\n",
-                                     address, lf->last_update(), title, data.first, data.second,
-                                     data.first->up_rate()->rate(), data.first->down_rate()->rate());
+                                     address, lf->last_update(), title, data->connection, data->weight,
+                                     (long long unsigned int)data->connection->up_rate()->rate(),
+                                     (long long unsigned int)data->connection->down_rate()->rate());
 
-  write(lf->file_descriptor(), buffer, buf_length);
+  int __UNUSED result = write(lf->file_descriptor(), buffer, buf_length);
 }
 
 void
@@ -194,7 +196,7 @@ log_choke_changes_func_allocate(void* address, const char* title, unsigned int i
   unsigned int buf_length = snprintf(buffer, 256, "%p %i %s %u %u %i\n",
                                      address, lf->last_update(), title, index, count, dist);
 
-  write(lf->file_descriptor(), buffer, buf_length);
+  int __UNUSED result = write(lf->file_descriptor(), buffer, buf_length);
 }
 
 }

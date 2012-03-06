@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ hash_string_from_hex_c_str(const char* first, HashString& hash) {
   return first;
 }
   
-const char*
+char*
 hash_string_to_hex(const HashString& hash, char* first) {
   return rak::transform_hex(hash.begin(), hash.end(), first);
 }

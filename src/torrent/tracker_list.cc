@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,34 +36,41 @@
 
 #include "config.h"
 
+#include <functional>
 #include <rak/functional.h>
 
-#include "torrent/download_info.h"
 #include "net/address_list.h"
-#include "tracker/tracker_manager.h"
+#include "torrent/utils/log.h"
+#include "torrent/utils/log_files.h"
+#include "torrent/utils/option_strings.h"
+#include "torrent/download_info.h"
+#include "tracker/tracker_dht.h"
+#include "tracker/tracker_http.h"
+#include "tracker/tracker_udp.h"
 
 #include "globals.h"
 #include "exceptions.h"
 #include "tracker.h"
 #include "tracker_list.h"
 
+#define LT_LOG_TRACKER(log_level, log_fmt, ...)                         \
+  lt_log_print_info(LOG_TRACKER_##log_level, info(), "->tracker_list: " log_fmt, __VA_ARGS__);
+
+namespace std { using namespace tr1; }
+
 namespace torrent {
 
-TrackerList::TrackerList(TrackerManager* manager) :
-  m_manager(manager),
+TrackerList::TrackerList() :
   m_info(NULL),
   m_state(DownloadInfo::STOPPED),
 
   m_key(0),
-  m_numwant(-1),
-  m_timeLastConnection(0),
-
-  m_itr(begin()) {
+  m_numwant(-1) {
 }
 
 bool
 TrackerList::has_active() const {
-  return m_itr != end() && (*m_itr)->is_busy();
+  return std::find_if(begin(), end(), std::mem_fun(&Tracker::is_busy)) != end();
 }
 
 // Need a custom predicate because the is_usable function is virtual.
@@ -76,9 +83,24 @@ TrackerList::has_usable() const {
   return std::find_if(begin(), end(), tracker_usable_t()) != end();
 }
 
+unsigned int
+TrackerList::count_active() const {
+  return std::count_if(begin(), end(), std::mem_fun(&Tracker::is_busy));
+}
+
+unsigned int
+TrackerList::count_usable() const {
+  return std::count_if(begin(), end(), tracker_usable_t());
+}
+
 void
-TrackerList::close_all() {
-  std::for_each(begin(), end(), std::mem_fun(&Tracker::close));
+TrackerList::close_all_excluding(int event_bitmap) {
+  for (iterator itr = begin(); itr != end(); itr++) {
+    if ((event_bitmap & (1 << (*itr)->latest_event())))
+      continue;
+
+    (*itr)->close();
+  }
 }
 
 void
@@ -88,48 +110,93 @@ TrackerList::clear() {
 }
 
 void
-TrackerList::send_state(int s) {
-  // Reset the target tracker since we're doing a new request.
-  if (m_itr != end())
-    (*m_itr)->close();
+TrackerList::clear_stats() {
+  std::for_each(begin(), end(), std::mem_fun(&Tracker::clear_stats));
+}
 
-  set_state(s);
-  m_itr = find_usable(m_itr);
+void
+TrackerList::send_state(Tracker* tracker, int new_event) {
+  if (!tracker->is_usable() || new_event == Tracker::EVENT_SCRAPE)
+    return;
 
-  if (m_itr != end())
-    (*m_itr)->send_state(state());
-  else
-    m_manager->receive_failed("Tried all trackers.");
+  if (tracker->is_busy()) {
+    if (tracker->latest_event() != Tracker::EVENT_SCRAPE)
+      return;
+
+    tracker->close();
+  }
+
+  tracker->send_state(new_event);
+
+  LT_LOG_TRACKER(INFO, "Sending '%s' to group:%u url:'%s'.",
+                 option_as_string(OPTION_TRACKER_EVENT, new_event),
+                 tracker->group(), tracker->url().c_str());
+}
+
+void
+TrackerList::send_scrape(Tracker* tracker) {
+  if (tracker->is_busy() || !tracker->is_usable())
+    return;
+
+  if (!(tracker->flags() & Tracker::flag_can_scrape))
+    return;
+
+  if (rak::timer::from_seconds(tracker->scrape_time_last()) + rak::timer::from_seconds(10 * 60) > cachedTime )
+    return;
+
+  tracker->send_scrape();
+  LT_LOG_TRACKER(INFO, "Sending 'scrape' to group:%u url:'%s'.",
+                 tracker->group(), tracker->url().c_str());
 }
 
 TrackerList::iterator
-TrackerList::insert(unsigned int group, Tracker* t) {
-  t->set_group(group);
+TrackerList::insert(unsigned int group, Tracker* tracker) {
+  tracker->set_group(group);
+  
+  iterator itr = base_type::insert(end_group(group), tracker);
 
-  iterator itr = base_type::insert(end_group(group), t);
+  if (m_slot_tracker_enabled)
+    m_slot_tracker_enabled(tracker);
 
-  m_itr = begin();
   return itr;
 }
 
-uint32_t
-TrackerList::time_next_connection() const {
-  return std::max(m_manager->get_next_timeout() - cachedTime, rak::timer()).seconds();
+// TODO: Use proper flags for insert options.
+void
+TrackerList::insert_url(unsigned int group, const std::string& url, bool extra_tracker) {
+  Tracker* tracker;
+  int flags = Tracker::flag_enabled;
+
+  if (extra_tracker)
+    flags |= Tracker::flag_extra_tracker;
+
+  if (std::strncmp("http://", url.c_str(), 7) == 0 ||
+      std::strncmp("https://", url.c_str(), 8) == 0) {
+    tracker = new TrackerHttp(this, url, flags);
+
+  } else if (std::strncmp("udp://", url.c_str(), 6) == 0) {
+    tracker = new TrackerUdp(this, url, flags);
+
+  } else if (std::strncmp("dht://", url.c_str(), 6) == 0 && TrackerDht::is_allowed()) {
+    tracker = new TrackerDht(this, url, flags);
+
+  } else {
+    LT_LOG_TRACKER(WARN, "Could find matching tracker protocol for url: '%s'.", url.c_str());
+
+    if (extra_tracker)
+      throw torrent::input_error("Could find matching tracker protocol for url: '" + url + "'.");
+
+    return;
+  }
+  
+  LT_LOG_TRACKER(INFO, "Added tracker group:%i url:'%s'.", group, url.c_str());
+  insert(group, tracker);
 }
 
-void
-TrackerList::send_completed() {
-  m_manager->send_completed();
-}
-
-void
-TrackerList::manual_request(bool force) {
-  m_manager->manual_request(force);
-}
-
-void
-TrackerList::manual_cancel() {
-  m_manager->close();
+TrackerList::iterator
+TrackerList::find_url(const std::string& url) {
+  return std::find_if(begin(), end(), std::bind(std::equal_to<std::string>(), url,
+                                                std::bind(&Tracker::url, std::placeholders::_1)));
 }
 
 TrackerList::iterator
@@ -149,14 +216,43 @@ TrackerList::find_usable(const_iterator itr) const {
 }
 
 TrackerList::iterator
+TrackerList::find_next_to_request(iterator itr) {
+  TrackerList::iterator preferred = itr = std::find_if(itr, end(), std::mem_fun(&Tracker::can_request_state));
+
+  if (preferred == end() || (*preferred)->failed_counter() == 0)
+    return preferred;
+
+  while (++itr != end()) {
+    if (!(*itr)->can_request_state())
+      continue;
+
+    if ((*itr)->failed_counter() != 0) {
+      if ((*itr)->failed_time_next() < (*preferred)->failed_time_next())
+        preferred = itr;
+
+    } else {
+      if ((*itr)->success_time_next() < (*preferred)->failed_time_next())
+        preferred = itr;
+
+      break;
+    }
+  }
+
+  return preferred;
+}
+
+TrackerList::iterator
 TrackerList::begin_group(unsigned int group) {
   return std::find_if(begin(), end(), rak::less_equal(group, std::mem_fun(&Tracker::group)));
 }
 
+TrackerList::size_type
+TrackerList::size_group() const {
+  return !empty() ? back()->group() + 1 : 0;
+}
+
 void
 TrackerList::cycle_group(unsigned int group) {
-  Tracker* trackerPtr = m_itr != end() ? *m_itr : NULL;
-
   iterator itr = begin_group(group);
   iterator prev = itr;
 
@@ -167,8 +263,6 @@ TrackerList::cycle_group(unsigned int group) {
     std::iter_swap(itr, prev);
     prev = itr;
   }
-
-  m_itr = find(trackerPtr);
 }
 
 TrackerList::iterator
@@ -178,7 +272,7 @@ TrackerList::promote(iterator itr) {
   if (first == end())
     throw internal_error("torrent::TrackerList::promote(...) Could not find beginning of group.");
 
-  std::swap(first, itr);
+  std::swap(*first, *itr);
   return first;
 }
 
@@ -195,57 +289,71 @@ TrackerList::randomize_group_entries() {
   }
 }
 
-bool
-TrackerList::focus_next_group() {
-  return (m_itr = end_group((*m_itr)->group())) != end();
-}
-
-uint32_t
-TrackerList::focus_normal_interval() const {
-  if (m_itr == end()) {
-    const_iterator itr = find_usable(begin());
-    
-    if (itr == end())
-      return 1800;
-
-    return (*itr)->normal_interval();
-  }
-
-  return (*m_itr)->normal_interval();
-}
-
-uint32_t
-TrackerList::focus_min_interval() const {
-  return 0;
-}
-
 void
 TrackerList::receive_success(Tracker* tb, AddressList* l) {
   iterator itr = find(tb);
 
-  if (itr != m_itr || m_itr == end() || (*m_itr)->is_busy())
+  if (itr == end() || tb->is_busy())
     throw internal_error("TrackerList::receive_success(...) called but the iterator is invalid.");
 
   // Promote the tracker to the front of the group since it was
   // successfull.
-  m_itr = promote(m_itr);
+  itr = promote(itr);
 
   l->sort();
   l->erase(std::unique(l->begin(), l->end()), l->end());
 
-  set_time_last_connection(cachedTime.seconds());
-  m_manager->receive_success(l);
+  LT_LOG_TRACKER(INFO, "Received %u peers from tracker url:'%s'.", l->size(), tb->url().c_str());
+
+  tb->m_success_time_last = cachedTime.seconds();
+  tb->m_success_counter++;
+  tb->m_failed_counter = 0;
+
+  tb->m_latest_sum_peers = l->size();
+  tb->m_latest_new_peers = m_slot_success(tb, l);
 }
 
 void
 TrackerList::receive_failed(Tracker* tb, const std::string& msg) {
   iterator itr = find(tb);
 
-  if (itr != m_itr || m_itr == end() || (*m_itr)->is_busy())
+  if (itr == end() || tb->is_busy())
     throw internal_error("TrackerList::receive_failed(...) called but the iterator is invalid.");
 
-  m_itr++;
-  m_manager->receive_failed(msg);
+  LT_LOG_TRACKER(INFO, "Failed to connect to tracker url:'%s' msg:'%s'.", tb->url().c_str(), msg.c_str());
+
+  tb->m_failed_time_last = cachedTime.seconds();
+  tb->m_failed_counter++;
+  m_slot_failed(tb, msg);
+}
+
+void
+TrackerList::receive_scrape_success(Tracker* tb) {
+  iterator itr = find(tb);
+
+  if (itr == end() || tb->is_busy())
+    throw internal_error("TrackerList::receive_success(...) called but the iterator is invalid.");
+
+  LT_LOG_TRACKER(INFO, "Received scrape from tracker url:'%s'.", tb->url().c_str());
+
+  tb->m_scrape_time_last = cachedTime.seconds();
+  tb->m_scrape_counter++;
+
+  if (m_slot_scrape_success)
+    m_slot_scrape_success(tb);
+}
+
+void
+TrackerList::receive_scrape_failed(Tracker* tb, const std::string& msg) {
+  iterator itr = find(tb);
+
+  if (itr == end() || tb->is_busy())
+    throw internal_error("TrackerList::receive_failed(...) called but the iterator is invalid.");
+
+  LT_LOG_TRACKER(INFO, "Failed to scrape tracker url:'%s' msg:'%s'.", tb->url().c_str(), msg.c_str());
+
+  if (m_slot_scrape_failed)
+    m_slot_scrape_failed(tb, msg);
 }
 
 }
