@@ -1,3 +1,9 @@
+libtorrent (0.13.0-1) experimental; urgency=low
+
+  * New upstream version.
+
+ -- Benoît Knecht <benoit.knecht@fsfe.org>  Thu, 08 Mar 2012 13:54:23 +0100
+
 libtorrent (0.12.9-3) unstable; urgency=medium
 
   * Urgency medium due to RC bugfix. Closes: #644031.
