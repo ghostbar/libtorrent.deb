@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -197,8 +197,8 @@ PollEPoll::close(Event* event) {
   // Clear the event list just in case we open a new socket with the
   // same fd while in the middle of calling PollEPoll::perform.
   for (epoll_event *itr = m_events, *last = m_events + m_waitingEvents; itr != last; ++itr)
-    if (itr->data.ptr == event)
-      itr->data.ptr = NULL;
+    if (itr->data.fd == event->file_descriptor())
+      itr->events = 0;
 }
 
 void
@@ -208,12 +208,10 @@ PollEPoll::closed(Event* event) {
   if (m_table[event->file_descriptor()].second == event)
     m_table[event->file_descriptor()] = Table::value_type();
 
-  /*
-  for (epoll_event *itr = m_events, *last = m_events + m_waitingEvents; itr != last; ++itr) {
-    if (itr->data.ptr == event)
-      itr->data.ptr = NULL;
-  }
-  */
+  // for (epoll_event *itr = m_events, *last = m_events + m_waitingEvents; itr != last; ++itr) {
+  //   if (itr->data.fd == event->file_descriptor())
+  //     itr->events = 0;
+  // }
 }
 
 // Use custom defines for EPOLL* to make the below code compile with

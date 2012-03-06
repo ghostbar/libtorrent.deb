@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -85,7 +85,7 @@ Throttle::set_max_rate(uint32_t v) {
   if (v == m_maxRate)
     return;
 
-  if (v < 0 || v > (1 << 30))
+  if (v > (1 << 30))
     throw input_error("Throttle rate must be between 0 and 2^30.");
 
   uint32_t oldRate = m_maxRate;

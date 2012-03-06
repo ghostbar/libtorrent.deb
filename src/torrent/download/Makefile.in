@@ -39,7 +39,8 @@ subdir = src/torrent/download
 DIST_COMMON = $(libtorrentinclude_HEADERS) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/scripts/attributes.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/scripts/acx_pthread.m4 \
+	$(top_srcdir)/scripts/attributes.m4 \
 	$(top_srcdir)/scripts/checks.m4 \
 	$(top_srcdir)/scripts/common.m4 \
 	$(top_srcdir)/scripts/libtool.m4 \
@@ -182,6 +183,9 @@ PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
+PTHREAD_CC = @PTHREAD_CC@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+PTHREAD_LIBS = @PTHREAD_LIBS@
 RANLIB = @RANLIB@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
@@ -198,6 +202,7 @@ ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
+acx_pthread_config = @acx_pthread_config@
 am__include = @am__include@
 am__leading_dot = @am__leading_dot@
 am__quote = @am__quote@
@@ -251,6 +256,7 @@ libsub_torrentdownload_la_SOURCES = \
 	choke_queue.h \
 	download_manager.cc \
 	download_manager.h \
+	group_entry.h \
 	resource_manager.cc \
 	resource_manager.h
 
@@ -260,6 +266,7 @@ libtorrentinclude_HEADERS = \
 	choke_group.h \
 	choke_queue.h \
 	download_manager.h \
+	group_entry.h \
 	resource_manager.h
 
 all: all-am

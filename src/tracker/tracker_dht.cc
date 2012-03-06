@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -45,6 +45,7 @@
 #include "torrent/dht_manager.h"
 #include "torrent/exceptions.h"
 #include "torrent/tracker_list.h"
+#include "torrent/utils/log.h"
 
 #include "tracker_dht.h"
 
@@ -55,8 +56,10 @@ namespace torrent {
 
 const char* TrackerDht::states[] = { "Idle", "Searching", "Announcing" };
 
-TrackerDht::TrackerDht(TrackerList* parent, const std::string& url) :
-  Tracker(parent, url),
+bool TrackerDht::is_allowed() { return manager->dht_manager()->is_valid(); }
+
+TrackerDht::TrackerDht(TrackerList* parent, const std::string& url, int flags) :
+  Tracker(parent, url, flags),
   m_state(state_idle) {
 
   if (!manager->dht_manager()->is_valid())
@@ -75,7 +78,7 @@ TrackerDht::is_busy() const {
 
 bool
 TrackerDht::is_usable() const {
-  return m_enabled && manager->dht_manager()->is_active();
+  return is_enabled() && manager->dht_manager()->is_active();
 }
 
 void
@@ -89,6 +92,8 @@ TrackerDht::send_state(int state) {
     if (is_busy())
       throw internal_error("TrackerDht::send_state cancel_announce did not cancel announce.");
   }
+
+  m_latest_event = state;
 
   if (state == DownloadInfo::STOPPED)
     return;

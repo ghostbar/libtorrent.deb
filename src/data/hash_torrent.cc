@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -188,7 +188,7 @@ HashTorrent::queue(bool quick) {
 
       m_errno = handle.error_number().value();
 
-      //         rak::priority_queue_erase(&taskScheduler, &m_delayChecked);
+      rak::priority_queue_erase(&taskScheduler, &m_delayChecked);
       rak::priority_queue_insert(&taskScheduler, &m_delayChecked, cachedTime);
       return;
     }

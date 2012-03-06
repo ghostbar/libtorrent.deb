@@ -39,7 +39,8 @@ subdir = src/torrent
 DIST_COMMON = $(libtorrentinclude_HEADERS) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/scripts/attributes.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/scripts/acx_pthread.m4 \
+	$(top_srcdir)/scripts/attributes.m4 \
 	$(top_srcdir)/scripts/checks.m4 \
 	$(top_srcdir)/scripts/common.m4 \
 	$(top_srcdir)/scripts/libtool.m4 \
@@ -61,7 +62,8 @@ am_libsub_torrent_la_OBJECTS = bitfield.lo chunk_manager.lo \
 	exceptions.lo hash_string.lo http.lo object.lo \
 	object_static_map.lo object_stream.lo path.lo poll_epoll.lo \
 	poll_kqueue.lo poll_select.lo rate.lo thread_base.lo \
-	throttle.lo torrent.lo tracker.lo tracker_list.lo
+	throttle.lo torrent.lo tracker.lo tracker_controller.lo \
+	tracker_list.lo
 libsub_torrent_la_OBJECTS = $(am_libsub_torrent_la_OBJECTS)
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
@@ -223,6 +225,9 @@ PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
+PTHREAD_CC = @PTHREAD_CC@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+PTHREAD_LIBS = @PTHREAD_LIBS@
 RANLIB = @RANLIB@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
@@ -239,6 +244,7 @@ ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
+acx_pthread_config = @acx_pthread_config@
 am__include = @am__include@
 am__leading_dot = @am__leading_dot@
 am__quote = @am__quote@
@@ -339,6 +345,8 @@ libsub_torrent_la_SOURCES = \
 	torrent.h \
 	tracker.cc \
 	tracker.h \
+	tracker_controller.cc \
+	tracker_controller.h \
 	tracker_list.cc \
 	tracker_list.h
 
@@ -371,6 +379,7 @@ libtorrentinclude_HEADERS = \
 	throttle.h \
 	torrent.h \
 	tracker.h \
+	tracker_controller.h \
 	tracker_list.h
 
 all: all-recursive
@@ -446,6 +455,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/throttle.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/torrent.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracker.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracker_controller.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tracker_list.Plo@am__quote@
 
 .cc.o:

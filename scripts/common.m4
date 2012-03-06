@@ -181,6 +181,21 @@ AC_DEFUN([TORRENT_CHECK_MADVISE], [
   ])
 ])
 
+AC_DEFUN([TORRENT_CHECK_POPCOUNT], [
+  AC_MSG_CHECKING(for __builtin_popcount)
+
+  AC_COMPILE_IFELSE(
+    [[
+      void f() { __builtin_popcount(0); }
+    ]],
+    [
+      AC_MSG_RESULT(yes)
+      AC_DEFINE(USE_BUILTIN_POPCOUNT, 1, Use __builtin_popcount.)
+    ], [
+      AC_MSG_RESULT(no)
+  ])
+])
+
 AC_DEFUN([TORRENT_CHECK_CACHELINE], [
   AC_MSG_CHECKING(for cacheline)
 
@@ -197,11 +212,11 @@ dnl      AC_DEFINE(lt_cacheline_aligned, __cacheline_aligned, LibTorrent defined
 
 dnl   Need to fix this so that it uses the stuff defined by the system.
 
-      AC_DEFINE(LT_SMP_CACHE_BYTES, 128, Largest L1 cache size we know of, should work on all archs.)
+      AC_DEFINE(LT_SMP_CACHE_BYTES, 128, Largest L1 cache size we know of should work on all archs.)
       AC_DEFINE(lt_cacheline_aligned, __attribute__((__aligned__(LT_SMP_CACHE_BYTES))), LibTorrent defined cacheline aligned.)
     ], [
       AC_MSG_RESULT(using default 128 bytes)
-      AC_DEFINE(LT_SMP_CACHE_BYTES, 128, Largest L1 cache size we know of, should work on all archs.)
+      AC_DEFINE(LT_SMP_CACHE_BYTES, 128, Largest L1 cache size we know of should work on all archs.)
       AC_DEFINE(lt_cacheline_aligned, __attribute__((__aligned__(LT_SMP_CACHE_BYTES))), LibTorrent defined cacheline aligned.)
   ])
 ])

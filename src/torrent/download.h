@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -51,6 +51,8 @@ namespace torrent {
 class ConnectionList;
 class DownloadInfo;
 class DownloadMain;
+class download_data;
+class TrackerController;
 
 // Download is safe to copy and destory as it is just a pointer to an
 // internal class.
@@ -71,7 +73,8 @@ public:
 
   Download(DownloadWrapper* d = NULL) : m_ptr(d) {}
 
-  const DownloadInfo* info() const;
+  const DownloadInfo*  info() const;
+  const download_data* data() const;
 
   // Not active atm. Opens and prepares/closes the files.
   void                open(int flags = 0);
@@ -101,6 +104,7 @@ public:
   Object*             bencode();
   const Object*       bencode() const;
 
+  TrackerController*  tracker_controller() const;
   TrackerList*        tracker_list() const;
 
   FileList*           file_list() const;
@@ -119,7 +123,7 @@ public:
   const uint8_t*      chunks_seen() const;
 
   // Set the number of finished chunks for closed torrents.
-  void                set_chunks_done(uint32_t chunks);
+  void                set_chunks_done(uint32_t chunks_done, uint32_t chunks_wanted);
 
   // Use the below to set the resume data and what chunk ranges need
   // to be hash checked. If they arn't called then by default it will
@@ -148,12 +152,28 @@ public:
   uint32_t            max_size_pex() const;
 
   bool                accepting_new_peers() const;
+
   uint32_t            uploads_max() const;
-  
   void                set_uploads_max(uint32_t v);
+
+  uint32_t            uploads_min() const;
+  void                set_uploads_min(uint32_t v);
+
+  uint32_t            downloads_max() const;
+  void                set_downloads_max(uint32_t v);
+
+  uint32_t            downloads_min() const;
+  void                set_downloads_min(uint32_t v);
 
   void                set_upload_throttle(Throttle* t);
   void                set_download_throttle(Throttle* t);
+
+  // Some temporary functions that are routed to
+  // TrackerManager... Clean this up.
+  void                send_completed();
+
+  void                manual_request(bool force);
+  void                manual_cancel();
 
   typedef enum {
     CONNECTION_LEECH,

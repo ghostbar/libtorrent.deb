@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -46,7 +46,6 @@ namespace torrent {
 class Object;
 class Content;
 class DownloadWrapper;
-class TrackerManager;
 class Path;
 
 typedef std::list<std::string> EncodingList;
@@ -57,12 +56,13 @@ public:
 
   void                initialize(Object& b);
 
+  void                parse_tracker(const Object& b);
+
   void                set_download(DownloadWrapper* d)         { m_download = d; }
   void                set_encoding_list(const EncodingList* e) { m_encodingList = e; }
 
 private:  
   void                parse_name(const Object& b);
-  void                parse_tracker(const Object& b);
   void                parse_info(const Object& b);
   void                parse_magnet_uri(Object& b, const std::string& uri);
 

@@ -5,11 +5,10 @@
 #include <torrent/utils/extents.h>
 #include <iostream>
 
-CPPUNIT_TEST_SUITE_REGISTRATION(ExtentsTest);
+// CPPUNIT_TEST_SUITE_REGISTRATION(ExtentsTest);
 
 void
 ExtentsTest::setUp() {
-
 }
 
 void
@@ -25,9 +24,9 @@ bool
 verify_extent_data(Extent& extent, const uint32_t* idx, const int* val) {
   while (*idx != *(idx + 1)) {
     if (!extent.is_equal_range(*idx, *(idx + 1) - 1, *val)) {
-      std::cout << *idx << ' ' << *(idx + 1) << ' ' << *val << std::endl;
-      std::cout << extent.at(*idx) << std::endl;
-      std::cout << extent.at(*(idx + 1)) << std::endl;
+      // std::cout << *idx << ' ' << *(idx + 1) << ' ' << *val << std::endl;
+      // std::cout << extent.at(*idx) << std::endl;
+      // std::cout << extent.at(*(idx + 1)) << std::endl;
       return false;
     }
 

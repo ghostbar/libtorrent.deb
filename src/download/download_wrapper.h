@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -67,6 +67,9 @@ public:
   ~DownloadWrapper();
 
   DownloadInfo*       info()                                  { return m_main->info(); }
+  download_data*      data()                                  { return m_main->file_list()->mutable_data(); }
+  FileList*           file_list()                             { return m_main->file_list(); }
+  ChunkList*          chunk_list()                            { return m_main->chunk_list(); }
 
   // Initialize hash checker and various download stuff.
   void                initialize(const std::string& hash, const std::string& id);
@@ -102,7 +105,7 @@ public:
   void                check_chunk_hash(ChunkHandle handle);
 
   void                receive_storage_error(const std::string& str);
-  void                receive_tracker_success(AddressList* l);
+  uint32_t            receive_tracker_success(AddressList* l);
   void                receive_tracker_failed(const std::string& msg);
 
   void                receive_tick(uint32_t ticks);

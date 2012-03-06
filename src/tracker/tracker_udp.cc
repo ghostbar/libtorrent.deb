@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -48,14 +48,16 @@
 #include "torrent/download_info.h"
 #include "torrent/poll.h"
 #include "torrent/tracker_list.h"
+#include "torrent/utils/log.h"
 
 #include "tracker_udp.h"
 #include "manager.h"
 
 namespace torrent {
 
-TrackerUdp::TrackerUdp(TrackerList* parent, const std::string& url) :
-  Tracker(parent, url),
+TrackerUdp::TrackerUdp(TrackerList* parent, const std::string& url, int flags) :
+  Tracker(parent, url, flags),
+
   m_slotResolver(NULL),
   m_readBuffer(NULL),
   m_writeBuffer(NULL) {
@@ -78,6 +80,7 @@ TrackerUdp::is_busy() const {
 void
 TrackerUdp::send_state(int state) {
   close();
+  m_latest_event = state;
 
   char hostname[1024];
       
@@ -187,8 +190,7 @@ TrackerUdp::event_read() {
   m_readBuffer->reset_position();
   m_readBuffer->set_end(s);
 
-  if (!m_parent->info()->signal_tracker_dump().empty())
-    m_parent->info()->signal_tracker_dump().emit(m_url, (const char*)m_readBuffer->begin(), s);
+  lt_log_print(LOG_TRACKER_DEBUG, "--- Tracker UDP received ---\n%*s\n---", s, (const char*)m_readBuffer->begin());
 
   if (s < 4)
     return;
@@ -232,11 +234,13 @@ TrackerUdp::event_write() {
   if (m_writeBuffer->size_end() == 0)
     throw internal_error("TrackerUdp::write() called but the write buffer is empty.");
 
-  int s = write_datagram(m_writeBuffer->begin(), m_writeBuffer->size_end(), &m_connectAddress);
+  int __UNUSED s = write_datagram(m_writeBuffer->begin(), m_writeBuffer->size_end(), &m_connectAddress);
+
+  lt_log_print(LOG_TRACKER_DEBUG, "--- Tracker UDP send ---\n%*s\n---", m_readBuffer->size_end(), (const char*)m_readBuffer->begin());
 
   // TODO: If send failed, retry shortly or do i call receive_failed?
-  if (s != m_writeBuffer->size_end())
-    ;
+  // if (s != m_writeBuffer->size_end())
+  //   ;
 
   manager->poll()->remove_write(this);
 }
@@ -305,8 +309,9 @@ TrackerUdp::process_announce_output() {
 
   set_normal_interval(m_readBuffer->read_32());
 
-  m_readBuffer->read_32(); // leechers
-  m_readBuffer->read_32(); // seeders
+  m_scrape_incomplete = m_readBuffer->read_32(); // leechers
+  m_scrape_complete   = m_readBuffer->read_32(); // seeders
+  m_scrape_time_last  = rak::timer::current().seconds();
 
   AddressList l;
 

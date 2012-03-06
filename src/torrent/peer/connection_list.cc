@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -44,6 +44,7 @@
 #include "protocol/peer_connection_base.h"
 #include "torrent/exceptions.h"
 #include "torrent/download_info.h"
+#include "torrent/download/choke_group.h"
 #include "torrent/download/choke_queue.h"
 
 #include "connection_list.h"
@@ -68,6 +69,17 @@ ConnectionList::clear() {
   base_type::clear();
   
   m_disconnectQueue.clear();
+}
+
+bool
+ConnectionList::want_connection(PeerInfo* p, Bitfield* bitfield) {
+  if (m_download->file_list()->is_done() || m_download->initial_seeding() != NULL)
+    return !bitfield->is_all_set();
+
+  if (!m_download->info()->is_accepting_seeders())
+    return !bitfield->is_all_set();
+
+  return true;
 }
 
 PeerConnectionBase*
@@ -104,7 +116,8 @@ ConnectionList::erase(iterator pos, int flags) {
 
   if (flags & disconnect_delayed) {
     m_disconnectQueue.push_back((*pos)->id());
-    priority_queue_insert(&taskScheduler, &m_download->delay_disconnect_peers(), cachedTime);
+    if (!m_download->delay_disconnect_peers().is_queued())
+      priority_queue_insert(&taskScheduler, &m_download->delay_disconnect_peers(), cachedTime);
     return pos;
   }
 
@@ -231,7 +244,7 @@ ConnectionList::set_max_size(size_type v) {
 
   m_maxSize = v;
   m_download->info()->change_flags(DownloadInfo::flag_accepting_new_peers, size() < m_maxSize);
-  m_download->upload_choke_manager()->balance();
+  //m_download->choke_group()->up_queue()->balance();
 }
 
 }

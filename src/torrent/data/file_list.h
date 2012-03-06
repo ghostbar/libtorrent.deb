@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -37,10 +37,13 @@
 #ifndef LIBTORRENT_FILE_LIST_H
 #define LIBTORRENT_FILE_LIST_H
 
+#include <algorithm>
+#include <functional>
 #include <vector>
 #include <torrent/common.h>
-#include <torrent/bitfield.h>
 #include <torrent/path.h>
+#include <torrent/data/file.h>
+#include <torrent/data/download_data.h>
 
 namespace torrent {
 
@@ -104,9 +107,9 @@ public:
 
   size_t              size_files() const                              { return base_type::size(); }
   uint64_t            size_bytes() const                              { return m_torrentSize; }
-  uint32_t            size_chunks() const                             { return m_bitfield.size_bits(); }
+  uint32_t            size_chunks() const                             { return bitfield()->size_bits(); }
 
-  uint32_t            completed_chunks() const                        { return m_bitfield.size_set(); }
+  uint32_t            completed_chunks() const                        { return bitfield()->size_set(); }
   uint64_t            completed_bytes() const;
   uint64_t            left_bytes() const;
 
@@ -114,7 +117,8 @@ public:
   uint32_t            chunk_index_size(uint32_t index) const;
   uint64_t            chunk_index_position(uint32_t index) const      { return index * chunk_size(); }
 
-  const Bitfield*     bitfield() const                                { return &m_bitfield; }
+  const download_data* data() const                                   { return &m_data; }
+  const Bitfield*      bitfield() const                               { return m_data.completed_bitfield(); }
 
   // You may only call set_root_dir after all nodes have been added.
   const std::string&  root_dir() const                                { return m_rootDir; }
@@ -156,7 +160,7 @@ protected:
   void                open(int flags) LIBTORRENT_NO_EXPORT;
   void                close() LIBTORRENT_NO_EXPORT;
 
-  Bitfield*           mutable_bitfield()                               { return &m_bitfield; }
+  download_data*      mutable_data()                                   { return &m_data; }
 
   // Before calling this function, make sure you clear errno. If
   // creating the chunk failed, NULL is returned and errno is set.
@@ -176,6 +180,8 @@ private:
   void                make_directory(Path::const_iterator pathBegin, Path::const_iterator pathEnd, Path::const_iterator startItr) LIBTORRENT_NO_EXPORT;
   MemoryChunk         create_chunk_part(FileList::iterator itr, uint64_t offset, uint32_t length, int prot) LIBTORRENT_NO_EXPORT;
 
+  download_data       m_data;
+
   bool                m_isOpen;
 
   uint64_t            m_torrentSize;
@@ -183,7 +189,6 @@ private:
   uint64_t            m_maxFileSize;
 
   std::string         m_rootDir;
-  Bitfield            m_bitfield;
 
   path_list           m_indirectLinks;
 
@@ -191,6 +196,11 @@ private:
   bool                m_isMultiFile;
   std::string         m_frozenRootDir;
 };
+
+inline FileList::iterator
+file_list_contains_position(FileList* file_list, uint64_t pos) {
+  return std::find_if(file_list->begin(), file_list->end(), std::bind2nd(std::mem_fun(&File::is_valid_position), pos));
+}
 
 }
 

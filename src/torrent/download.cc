@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,6 +36,9 @@
 
 #include "config.h"
 
+#define __STDC_FORMAT_MACROS
+
+#include <inttypes.h>
 #include <rak/functional.h>
 #include <sigc++/adaptors/bind.h>
 #include <sigc++/adaptors/hide.h>
@@ -52,11 +55,14 @@
 #include "protocol/peer_connection_base.h"
 #include "protocol/peer_factory.h"
 #include "peer/peer_info.h"
-#include "tracker/tracker_manager.h"
+#include "torrent/download/choke_group.h"
 #include "torrent/download/choke_queue.h"
 #include "torrent/download_info.h"
 #include "torrent/data/file.h"
 #include "torrent/peer/connection_list.h"
+#include "torrent/tracker_controller.h"
+#include "torrent/tracker_list.h"
+#include "torrent/utils/log.h"
 
 #include "exceptions.h"
 #include "download.h"
@@ -66,8 +72,8 @@
 
 namespace torrent {
 
-const DownloadInfo*
-Download::info() const { return m_ptr->info(); }
+const DownloadInfo* Download::info() const { return m_ptr->info(); }
+const download_data* Download::data() const { return m_ptr->data(); }
 
 void
 Download::open(int flags) {
@@ -77,7 +83,7 @@ Download::open(int flags) {
   // Currently always open with no_create, as start will make sure
   // they are created. Need to fix this.
   m_ptr->main()->open(FileList::open_no_create);
-  m_ptr->hash_checker()->ranges().insert(0, m_ptr->main()->file_list()->size_chunks());
+  m_ptr->hash_checker()->hashing_ranges().insert(0, m_ptr->main()->file_list()->size_chunks());
 
   // Mark the files by default to be created and resized. The client
   // should be allowed to pass a flag that will keep the old settings,
@@ -102,14 +108,18 @@ Download::close(int flags) {
 
 void
 Download::start(int flags) {
+  DownloadInfo* info = m_ptr->info();
+
   if (!m_ptr->hash_checker()->is_checked())
     throw internal_error("Tried to start an unchecked download.");
 
-  if (!m_ptr->info()->is_open())
+  if (!info->is_open())
     throw internal_error("Tried to start a closed download.");
 
-  if (m_ptr->info()->is_active())
+  if (info->is_active())
     return;
+
+  m_ptr->data()->verify_wanted_chunks("Download::start(...)");
 
 //   file_list()->open(flags);
 
@@ -124,21 +134,21 @@ Download::start(int flags) {
   }
 
   m_ptr->main()->start();
-  m_ptr->main()->tracker_manager()->set_active(true);
+  m_ptr->main()->tracker_controller()->enable();
 
   // Reset the uploaded/download baseline when we restart the download
   // so that broken trackers get the right uploaded ratio.
   if (!(flags & start_keep_baseline)) {
-    m_ptr->info()->set_uploaded_baseline(m_ptr->info()->up_rate()->total());
-    m_ptr->info()->set_completed_baseline(m_ptr->main()->file_list()->completed_bytes());
+    info->set_uploaded_baseline(info->up_rate()->total());
+    info->set_completed_baseline(m_ptr->main()->file_list()->completed_bytes());
+
+    lt_log_print_info(LOG_TRACKER_INFO, info,
+                      "->download: Setting new baseline on start: uploaded:%" PRIu64 " completed:%" PRIu64 ".",
+                      info->uploaded_baseline(), info->completed_baseline());
   }
 
-  if (flags & start_skip_tracker)
-    // If tracker_manager isn't active and nothing is sent, it will
-    // stay stuck.
-    m_ptr->main()->tracker_manager()->send_later();
-  else
-    m_ptr->main()->tracker_manager()->send_start();
+  if (!(flags & start_skip_tracker))
+    m_ptr->main()->tracker_controller()->send_start_event();
 }
 
 void
@@ -147,10 +157,10 @@ Download::stop(int flags) {
     return;
 
   m_ptr->main()->stop();
-  m_ptr->main()->tracker_manager()->set_active(false);
+  m_ptr->main()->tracker_controller()->disable();
 
   if (!(flags & stop_skip_tracker))
-    m_ptr->main()->tracker_manager()->send_stop();
+    m_ptr->main()->tracker_controller()->send_stop_event();
 }
 
 bool
@@ -164,7 +174,7 @@ Download::hash_check(bool tryQuick) {
   if (m_ptr->hash_checker()->is_checked())
     throw internal_error("Download::hash_check(...) called but already hash checked.");
 
-  Bitfield* bitfield = m_ptr->main()->file_list()->mutable_bitfield();
+  Bitfield* bitfield = m_ptr->data()->mutable_completed_bitfield();
 
   if (bitfield->empty()) {
     // The bitfield still hasn't been allocated, so no resume data was
@@ -172,7 +182,7 @@ Download::hash_check(bool tryQuick) {
     bitfield->allocate();
     bitfield->unset_all();
 
-    m_ptr->hash_checker()->ranges().insert(0, m_ptr->main()->file_list()->size_chunks());
+    m_ptr->hash_checker()->hashing_ranges().insert(0, m_ptr->main()->file_list()->size_chunks());
   }
 
   m_ptr->main()->file_list()->update_completed();
@@ -186,7 +196,7 @@ Download::hash_stop() {
   if (!m_ptr->hash_checker()->is_checking())
     return;
 
-  m_ptr->hash_checker()->ranges().erase(0, m_ptr->hash_checker()->position());
+  m_ptr->hash_checker()->hashing_ranges().erase(0, m_ptr->hash_checker()->position());
   m_ptr->hash_queue()->remove(m_ptr);
 
   m_ptr->hash_checker()->clear();
@@ -225,9 +235,14 @@ Download::file_list() const {
   return m_ptr->main()->file_list();
 }
 
+TrackerController*
+Download::tracker_controller() const {
+  return m_ptr->main()->tracker_controller();
+}
+
 TrackerList*
 Download::tracker_list() const {
-  return m_ptr->main()->tracker_manager()->container();
+  return m_ptr->main()->tracker_list();
 }
 
 PeerList*
@@ -280,11 +295,15 @@ Download::chunks_seen() const {
 }
 
 void
-Download::set_chunks_done(uint32_t chunks) {
-  if (m_ptr->info()->is_open())
-    throw input_error("Download::set_chunks_done(...) Download is open.");
+Download::set_chunks_done(uint32_t chunks_done, uint32_t chunks_wanted) {
+  if (m_ptr->info()->is_open() || !m_ptr->data()->mutable_completed_bitfield()->empty())
+    throw input_error("Download::set_chunks_done(...) Invalid state.");
 
-  m_ptr->main()->file_list()->mutable_bitfield()->set_size_set(chunks);
+  chunks_done   = std::min<uint32_t>(chunks_done,   m_ptr->file_list()->size_chunks());
+  chunks_wanted = std::min<uint32_t>(chunks_wanted, m_ptr->file_list()->size_chunks() - chunks_done);
+
+  m_ptr->data()->mutable_completed_bitfield()->set_size_set(chunks_done);
+  m_ptr->data()->set_wanted_chunks(chunks_wanted);
 }
 
 void
@@ -292,7 +311,7 @@ Download::set_bitfield(bool allSet) {
   if (m_ptr->hash_checker()->is_checked() || m_ptr->hash_checker()->is_checking())
     throw input_error("Download::set_bitfield(...) Download in invalid state.");
 
-  Bitfield* bitfield = m_ptr->main()->file_list()->mutable_bitfield();
+  Bitfield* bitfield = m_ptr->data()->mutable_completed_bitfield();
 
   bitfield->allocate();
 
@@ -301,7 +320,8 @@ Download::set_bitfield(bool allSet) {
   else
     bitfield->unset_all();
   
-  m_ptr->hash_checker()->ranges().clear();
+  m_ptr->data()->update_wanted_chunks();
+  m_ptr->hash_checker()->hashing_ranges().clear();
 }
 
 void
@@ -312,13 +332,14 @@ Download::set_bitfield(uint8_t* first, uint8_t* last) {
   if (std::distance(first, last) != (ptrdiff_t)m_ptr->main()->file_list()->bitfield()->size_bytes())
     throw input_error("Download::set_bitfield(...) Invalid length.");
 
-  Bitfield* bitfield = m_ptr->main()->file_list()->mutable_bitfield();
+  Bitfield* bitfield = m_ptr->data()->mutable_completed_bitfield();
 
   bitfield->allocate();
   std::memcpy(bitfield->begin(), first, bitfield->size_bytes());
   bitfield->update();
   
-  m_ptr->hash_checker()->ranges().clear();
+  m_ptr->data()->update_wanted_chunks();
+  m_ptr->hash_checker()->hashing_ranges().clear();
 }
 
 void
@@ -329,10 +350,12 @@ Download::update_range(int flags, uint32_t first, uint32_t last) {
     throw input_error("Download::clear_range(...) Download in invalid state.");
 
   if (flags & update_range_recheck)
-    m_ptr->hash_checker()->ranges().insert(first, last);
+    m_ptr->hash_checker()->hashing_ranges().insert(first, last);
   
-  if (flags & (update_range_clear | update_range_recheck))
-    m_ptr->main()->file_list()->mutable_bitfield()->unset_range(first, last);
+  if (flags & (update_range_clear | update_range_recheck)) {
+    m_ptr->data()->mutable_completed_bitfield()->unset_range(first, last);
+    m_ptr->data()->update_wanted_chunks();
+  }
 }
  
 void
@@ -352,12 +375,12 @@ Download::peers_accounted() const {
 
 uint32_t
 Download::peers_currently_unchoked() const {
-  return m_ptr->main()->upload_choke_manager()->size_unchoked();
+  return m_ptr->main()->choke_group()->up_queue()->size_unchoked();
 }
 
 uint32_t
 Download::peers_currently_interested() const {
-  return m_ptr->main()->upload_choke_manager()->size_total();
+  return m_ptr->main()->choke_group()->up_queue()->size_total();
 }
 
 uint32_t
@@ -375,12 +398,37 @@ Download::accepting_new_peers() const {
   return m_ptr->info()->is_accepting_new_peers();
 }
 
+// DEPRECATE
 uint32_t
 Download::uploads_max() const {
-  if (m_ptr->main()->upload_choke_manager()->max_unchoked() == choke_queue::unlimited)
+  if (m_ptr->main()->up_group_entry()->max_slots() == DownloadInfo::unlimited)
     return 0;
 
-  return m_ptr->main()->upload_choke_manager()->max_unchoked();
+  return m_ptr->main()->up_group_entry()->max_slots();
+}
+
+uint32_t
+Download::uploads_min() const {
+  // if (m_ptr->main()->up_group_entry()->min_slots() == DownloadInfo::unlimited)
+  //   return 0;
+
+  return m_ptr->main()->up_group_entry()->min_slots();
+}
+
+uint32_t
+Download::downloads_max() const {
+  if (m_ptr->main()->down_group_entry()->max_slots() == DownloadInfo::unlimited)
+    return 0;
+
+  return m_ptr->main()->down_group_entry()->max_slots();
+}
+
+uint32_t
+Download::downloads_min() const {
+  // if (m_ptr->main()->down_group_entry()->min_slots() == DownloadInfo::unlimited)
+  //   return 0;
+
+  return m_ptr->main()->down_group_entry()->min_slots();
 }
 
 void
@@ -400,13 +448,59 @@ Download::set_download_throttle(Throttle* t) {
 }
   
 void
+Download::send_completed() {
+  m_ptr->main()->tracker_controller()->send_completed_event();
+}
+
+void
+Download::manual_request(bool force) {
+  m_ptr->main()->tracker_controller()->manual_request(force);
+}
+
+void
+Download::manual_cancel() {
+  m_ptr->main()->tracker_controller()->close();
+}
+
+// DEPRECATE
+void
 Download::set_uploads_max(uint32_t v) {
   if (v > (1 << 16)) 
     throw input_error("Max uploads must be between 0 and 2^16."); 
 	 	 
   // For the moment, treat 0 as unlimited. 
-  m_ptr->main()->upload_choke_manager()->set_max_unchoked(v == 0 ? choke_queue::unlimited : v); 
-  m_ptr->main()->upload_choke_manager()->balance();
+  m_ptr->main()->up_group_entry()->set_max_slots(v == 0 ? DownloadInfo::unlimited : v); 
+  m_ptr->main()->choke_group()->up_queue()->balance_entry(m_ptr->main()->up_group_entry());
+}
+
+void
+Download::set_uploads_min(uint32_t v) {
+  if (v > (1 << 16)) 
+    throw input_error("Min uploads must be between 0 and 2^16."); 
+	 	 
+  // For the moment, treat 0 as unlimited. 
+  m_ptr->main()->up_group_entry()->set_min_slots(v); 
+  m_ptr->main()->choke_group()->up_queue()->balance_entry(m_ptr->main()->up_group_entry());
+}
+
+void
+Download::set_downloads_max(uint32_t v) {
+  if (v > (1 << 16)) 
+    throw input_error("Max downloads must be between 0 and 2^16."); 
+	 	 
+  // For the moment, treat 0 as unlimited. 
+  m_ptr->main()->down_group_entry()->set_max_slots(v == 0 ? DownloadInfo::unlimited : v); 
+  m_ptr->main()->choke_group()->down_queue()->balance_entry(m_ptr->main()->down_group_entry());
+}
+
+void
+Download::set_downloads_min(uint32_t v) {
+  if (v > (1 << 16)) 
+    throw input_error("Min downloads must be between 0 and 2^16."); 
+	 	 
+  // For the moment, treat 0 as unlimited. 
+  m_ptr->main()->down_group_entry()->set_min_slots(v); 
+  m_ptr->main()->choke_group()->down_queue()->balance_entry(m_ptr->main()->down_group_entry());
 }
 
 Download::ConnectionType
@@ -442,7 +536,7 @@ Download::set_connection_type(ConnectionType t) {
 
 Download::HeuristicType
 Download::upload_choke_heuristic() const {
-  return (Download::HeuristicType)m_ptr->main()->upload_choke_manager()->heuristics();
+  return (Download::HeuristicType)m_ptr->main()->choke_group()->up_queue()->heuristics();
 }
 
 void
@@ -450,12 +544,12 @@ Download::set_upload_choke_heuristic(HeuristicType t) {
   if ((choke_queue::heuristics_enum)t >= choke_queue::HEURISTICS_MAX_SIZE)
     throw input_error("Invalid heuristics value.");
   
-  m_ptr->main()->upload_choke_manager()->set_heuristics((choke_queue::heuristics_enum)t);
+  m_ptr->main()->choke_group()->up_queue()->set_heuristics((choke_queue::heuristics_enum)t);
 }
 
 Download::HeuristicType
 Download::download_choke_heuristic() const {
-  return (Download::HeuristicType)m_ptr->main()->download_choke_manager()->heuristics();
+  return (Download::HeuristicType)m_ptr->main()->choke_group()->down_queue()->heuristics();
 }
 
 void
@@ -463,7 +557,7 @@ Download::set_download_choke_heuristic(HeuristicType t) {
   if ((choke_queue::heuristics_enum)t >= choke_queue::HEURISTICS_MAX_SIZE)
     throw input_error("Invalid heuristics value.");
   
-  m_ptr->main()->download_choke_manager()->set_heuristics((choke_queue::heuristics_enum)t);
+  m_ptr->main()->choke_group()->down_queue()->set_heuristics((choke_queue::heuristics_enum)t);
 }
 
 void

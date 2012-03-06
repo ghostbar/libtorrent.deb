@@ -42,6 +42,9 @@
 /* Define to 1 if you have the `posix_memalign' function. */
 #undef HAVE_POSIX_MEMALIGN
 
+/* Define if you have POSIX threads libraries and header files. */
+#undef HAVE_PTHREAD
+
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
@@ -95,7 +98,7 @@
    */
 #undef LT_OBJDIR
 
-/* Largest L1 cache size we know of */
+/* Largest L1 cache size we know of should work on all archs. */
 #undef LT_SMP_CACHE_BYTES
 
 /* Name of package */
@@ -125,6 +128,10 @@
 /* 4 byte client and version identifier for DHT */
 #undef PEER_VERSION
 
+/* Define to the necessary symbol if this constant uses a non-standard name on
+   your system. */
+#undef PTHREAD_CREATE_JOINABLE
+
 /* enable ipv6 stuff */
 #undef RAK_USE_INET6
 
@@ -142,6 +149,12 @@
 
 /* Require byte alignment */
 #undef USE_ALIGNED
+
+/* Use __builtin_popcount. */
+#undef USE_BUILTIN_POPCOUNT
+
+/* Using Cyrus RC4 implementation. */
+#undef USE_CYRUS_RC4
 
 /* Use epoll. */
 #undef USE_EPOLL

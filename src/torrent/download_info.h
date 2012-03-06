@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -71,10 +71,15 @@ public:
   static const int flag_active              = (1 << 1);
   static const int flag_compact             = (1 << 2);
   static const int flag_accepting_new_peers = (1 << 3);
-  static const int flag_private             = (1 << 4);
-  static const int flag_meta_download       = (1 << 5);
-  static const int flag_pex_enabled         = (1 << 6);
-  static const int flag_pex_active          = (1 << 7);
+  static const int flag_accepting_seeders   = (1 << 4); // Only used during leeching.
+  static const int flag_private             = (1 << 5);
+  static const int flag_meta_download       = (1 << 6);
+  static const int flag_pex_enabled         = (1 << 7);
+  static const int flag_pex_active          = (1 << 8);
+
+  static const int public_flags = flag_accepting_seeders;
+
+  static const uint32_t unlimited = ~uint32_t();
 
   DownloadInfo();
 
@@ -94,14 +99,21 @@ public:
   bool                is_active() const                            { return m_flags & flag_active; }
   bool                is_compact() const                           { return m_flags & flag_compact; }
   bool                is_accepting_new_peers() const               { return m_flags & flag_accepting_new_peers; }
+  bool                is_accepting_seeders() const                 { return m_flags & flag_accepting_seeders; }
   bool                is_private() const                           { return m_flags & flag_private; }
   bool                is_meta_download() const                     { return m_flags & flag_meta_download; }
   bool                is_pex_enabled() const                       { return m_flags & flag_pex_enabled; }
   bool                is_pex_active() const                        { return m_flags & flag_pex_active; }
 
+  int                 flags() const                                { return m_flags; }
+
   void                set_flags(int flags)                         { m_flags |= flags; }
   void                unset_flags(int flags)                       { m_flags &= ~flags; }
   void                change_flags(int flags, bool state)          { if (state) set_flags(flags); else unset_flags(flags); }
+
+  void                public_set_flags(int flags) const                { m_flags |= (flags & public_flags); }
+  void                public_unset_flags(int flags) const              { m_flags &= ~(flags & public_flags); }
+  void                public_change_flags(int flags, bool state) const { if (state) public_set_flags(flags); else public_unset_flags(flags); }
 
   void                set_private()                                { set_flags(flag_private); unset_flags(flag_pex_enabled); }
   void                set_pex_enabled()                            { if (!is_private()) set_flags(flag_pex_enabled); }
@@ -141,14 +153,11 @@ public:
   uint32_t            udp_timeout() const                          { return 30; }
   uint32_t            udp_tries() const                            { return 2; }
 
-  // These signals are also used internally, so do not clear them or
-  // trigger them.
-  signal_void_type&   signal_initial_hash() const                  { return m_signalInitialHash; }
-  signal_void_type&   signal_download_done() const                 { return m_signalDownloadDone; }
+  uint32_t            upload_unchoked() const                      { return m_upload_unchoked; }
+  uint32_t            download_unchoked() const                    { return m_download_unchoked; }
 
   signal_string_type& signal_network_log() const                   { return m_signalNetworkLog; }
   signal_string_type& signal_storage_error() const                 { return m_signalStorageError; }
-  signal_dump_type&   signal_tracker_dump() const                  { return m_signalTrackerDump; }
 
   // The list of addresses is guaranteed to be sorted and unique.
   signal_void_type&   signal_tracker_success() const               { return m_signalTrackerSuccess; }
@@ -163,6 +172,9 @@ public:
 
   void                set_creation_date(uint32_t d)                { m_creationDate = d; }
 
+  void                set_upload_unchoked(uint32_t num)            { m_upload_unchoked = num; }
+  void                set_download_unchoked(uint32_t num)          { m_download_unchoked = num; }
+
   slot_stat_type&     slot_left()                                  { return m_slotStatLeft; }
   slot_stat_type&     slot_completed()                             { return m_slotStatCompleted; }
 
@@ -172,7 +184,7 @@ private:
   HashString          m_hashObfuscated;
   HashString          m_localId;
 
-  int                 m_flags;
+  mutable int         m_flags;
 
   mutable Rate        m_upRate;
   mutable Rate        m_downRate;
@@ -187,15 +199,14 @@ private:
   uint32_t            m_creationDate;
   uint32_t            m_loadDate;
 
+  uint32_t            m_upload_unchoked;
+  uint32_t            m_download_unchoked;
+
   slot_stat_type      m_slotStatLeft;
   slot_stat_type      m_slotStatCompleted;
 
-  mutable signal_void_type    m_signalInitialHash;
-  mutable signal_void_type    m_signalDownloadDone;
-
   mutable signal_string_type  m_signalNetworkLog;
   mutable signal_string_type  m_signalStorageError;
-  mutable signal_dump_type    m_signalTrackerDump;
 
   mutable signal_void_type    m_signalTrackerSuccess;
   mutable signal_string_type  m_signalTrackerFailed;

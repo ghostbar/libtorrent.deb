@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -55,8 +55,8 @@ public:
   bool                decrypt_valid() const             { return m_decryptValid; }
 
   void                set_obfuscated()                  { m_obfuscated = true; m_encrypted = m_decryptValid = false; }
-  void                set_encrypt(RC4 encrypt)          { m_encrypt = encrypt; m_encrypted = m_obfuscated = true; }
-  void                set_decrypt(RC4 decrypt)          { m_decrypt = decrypt; m_decryptValid = true; }
+  void                set_encrypt(const RC4& encrypt)   { m_encrypt = encrypt; m_encrypted = m_obfuscated = true; }
+  void                set_decrypt(const RC4& decrypt)   { m_decrypt = decrypt; m_decryptValid = true; }
 
 private:
   bool                m_encrypted;

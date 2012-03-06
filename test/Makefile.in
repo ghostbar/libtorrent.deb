@@ -38,7 +38,8 @@ check_PROGRAMS = $(am__EXEEXT_1)
 subdir = test
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/scripts/attributes.m4 \
+am__aclocal_m4_deps = $(top_srcdir)/scripts/acx_pthread.m4 \
+	$(top_srcdir)/scripts/attributes.m4 \
 	$(top_srcdir)/scripts/checks.m4 \
 	$(top_srcdir)/scripts/common.m4 \
 	$(top_srcdir)/scripts/libtool.m4 \
@@ -57,13 +58,29 @@ am__EXEEXT_1 = LibTorrentTest$(EXEEXT)
 am_LibTorrentTest_OBJECTS = LibTorrentTest-allocators_test.$(OBJEXT) \
 	LibTorrentTest-ranges_test.$(OBJEXT) \
 	LibTorrentTest-extents_test.$(OBJEXT) \
+	LibTorrentTest-http_test.$(OBJEXT) \
 	LibTorrentTest-object_test.$(OBJEXT) \
 	LibTorrentTest-object_test_utils.$(OBJEXT) \
 	LibTorrentTest-object_static_map_test.$(OBJEXT) \
 	LibTorrentTest-object_stream_test.$(OBJEXT) \
+	LibTorrentTest-tracker_controller_test.$(OBJEXT) \
+	LibTorrentTest-tracker_list_test.$(OBJEXT) \
+	LibTorrentTest-tracker_timeout_test.$(OBJEXT) \
+	LibTorrentTest-log_test.$(OBJEXT) \
+	LibTorrentTest-option_strings_test.$(OBJEXT) \
+	LibTorrentTest-tracker_http_test.$(OBJEXT) \
 	LibTorrentTest-main.$(OBJEXT)
 LibTorrentTest_OBJECTS = $(am_LibTorrentTest_OBJECTS)
-LibTorrentTest_DEPENDENCIES = ../src/libtorrent.la
+LibTorrentTest_DEPENDENCIES = ../src/libtorrent.la \
+	../src/torrent/libsub_torrent.la \
+	../src/torrent/data/libsub_torrentdata.la \
+	../src/torrent/download/libsub_torrentdownload.la \
+	../src/torrent/peer/libsub_torrentpeer.la \
+	../src/torrent/utils/libsub_torrentutils.la \
+	../src/data/libsub_data.la ../src/dht/libsub_dht.la \
+	../src/download/libsub_download.la ../src/net/libsub_net.la \
+	../src/protocol/libsub_protocol.la \
+	../src/tracker/libsub_tracker.la ../src/utils/libsub_utils.la
 LibTorrentTest_LINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) \
 	$(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) \
@@ -169,6 +186,9 @@ PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
+PTHREAD_CC = @PTHREAD_CC@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+PTHREAD_LIBS = @PTHREAD_LIBS@
 RANLIB = @RANLIB@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
@@ -185,6 +205,7 @@ ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
+acx_pthread_config = @acx_pthread_config@
 am__include = @am__include@
 am__leading_dot = @am__leading_dot@
 am__quote = @am__quote@
@@ -231,7 +252,19 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 LibTorrentTest_LDADD = \
-	../src/libtorrent.la
+	../src/libtorrent.la \
+	../src/torrent/libsub_torrent.la \
+	../src/torrent/data/libsub_torrentdata.la \
+	../src/torrent/download/libsub_torrentdownload.la \
+	../src/torrent/peer/libsub_torrentpeer.la \
+	../src/torrent/utils/libsub_torrentutils.la \
+	../src/data/libsub_data.la \
+	../src/dht/libsub_dht.la \
+	../src/download/libsub_download.la \
+	../src/net/libsub_net.la \
+	../src/protocol/libsub_protocol.la \
+	../src/tracker/libsub_tracker.la \
+	../src/utils/libsub_utils.la
 
 LibTorrentTest_SOURCES = \
 	rak/allocators_test.cc \
@@ -240,6 +273,8 @@ LibTorrentTest_SOURCES = \
 	rak/ranges_test.h \
 	torrent/extents_test.cc \
 	torrent/extents_test.h \
+	torrent/http_test.cc \
+	torrent/http_test.h \
 	torrent/object_test.cc \
 	torrent/object_test.h \
 	torrent/object_test_utils.cc \
@@ -248,6 +283,18 @@ LibTorrentTest_SOURCES = \
 	torrent/object_static_map_test.h \
 	torrent/object_stream_test.cc \
 	torrent/object_stream_test.h \
+	torrent/tracker_controller_test.cc \
+	torrent/tracker_controller_test.h \
+	torrent/tracker_list_test.cc \
+	torrent/tracker_list_test.h \
+	torrent/tracker_timeout_test.cc \
+	torrent/tracker_timeout_test.h \
+	torrent/utils/log_test.cc \
+	torrent/utils/log_test.h \
+	torrent/utils/option_strings_test.cc \
+	torrent/utils/option_strings_test.h \
+	tracker/tracker_http_test.cc \
+	tracker/tracker_http_test.h \
 	main.cc
 
 LibTorrentTest_CXXFLAGS = $(CPPUNIT_CFLAGS)
@@ -308,12 +355,19 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-allocators_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-extents_test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-http_test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-log_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-object_static_map_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-object_stream_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-object_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-object_test_utils.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-option_strings_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-ranges_test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-tracker_controller_test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-tracker_http_test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-tracker_list_test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/LibTorrentTest-tracker_timeout_test.Po@am__quote@
 
 .cc.o:
 @am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -378,6 +432,20 @@ LibTorrentTest-extents_test.obj: torrent/extents_test.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-extents_test.obj `if test -f 'torrent/extents_test.cc'; then $(CYGPATH_W) 'torrent/extents_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/extents_test.cc'; fi`
 
+LibTorrentTest-http_test.o: torrent/http_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-http_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-http_test.Tpo -c -o LibTorrentTest-http_test.o `test -f 'torrent/http_test.cc' || echo '$(srcdir)/'`torrent/http_test.cc
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-http_test.Tpo $(DEPDIR)/LibTorrentTest-http_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/http_test.cc' object='LibTorrentTest-http_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-http_test.o `test -f 'torrent/http_test.cc' || echo '$(srcdir)/'`torrent/http_test.cc
+
+LibTorrentTest-http_test.obj: torrent/http_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-http_test.obj -MD -MP -MF $(DEPDIR)/LibTorrentTest-http_test.Tpo -c -o LibTorrentTest-http_test.obj `if test -f 'torrent/http_test.cc'; then $(CYGPATH_W) 'torrent/http_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/http_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-http_test.Tpo $(DEPDIR)/LibTorrentTest-http_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/http_test.cc' object='LibTorrentTest-http_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-http_test.obj `if test -f 'torrent/http_test.cc'; then $(CYGPATH_W) 'torrent/http_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/http_test.cc'; fi`
+
 LibTorrentTest-object_test.o: torrent/object_test.cc
 @am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-object_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-object_test.Tpo -c -o LibTorrentTest-object_test.o `test -f 'torrent/object_test.cc' || echo '$(srcdir)/'`torrent/object_test.cc
 @am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-object_test.Tpo $(DEPDIR)/LibTorrentTest-object_test.Po
@@ -433,6 +501,90 @@ LibTorrentTest-object_stream_test.obj: torrent/object_stream_test.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/object_stream_test.cc' object='LibTorrentTest-object_stream_test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-object_stream_test.obj `if test -f 'torrent/object_stream_test.cc'; then $(CYGPATH_W) 'torrent/object_stream_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/object_stream_test.cc'; fi`
+
+LibTorrentTest-tracker_controller_test.o: torrent/tracker_controller_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-tracker_controller_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-tracker_controller_test.Tpo -c -o LibTorrentTest-tracker_controller_test.o `test -f 'torrent/tracker_controller_test.cc' || echo '$(srcdir)/'`torrent/tracker_controller_test.cc
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-tracker_controller_test.Tpo $(DEPDIR)/LibTorrentTest-tracker_controller_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/tracker_controller_test.cc' object='LibTorrentTest-tracker_controller_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-tracker_controller_test.o `test -f 'torrent/tracker_controller_test.cc' || echo '$(srcdir)/'`torrent/tracker_controller_test.cc
+
+LibTorrentTest-tracker_controller_test.obj: torrent/tracker_controller_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-tracker_controller_test.obj -MD -MP -MF $(DEPDIR)/LibTorrentTest-tracker_controller_test.Tpo -c -o LibTorrentTest-tracker_controller_test.obj `if test -f 'torrent/tracker_controller_test.cc'; then $(CYGPATH_W) 'torrent/tracker_controller_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/tracker_controller_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-tracker_controller_test.Tpo $(DEPDIR)/LibTorrentTest-tracker_controller_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/tracker_controller_test.cc' object='LibTorrentTest-tracker_controller_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-tracker_controller_test.obj `if test -f 'torrent/tracker_controller_test.cc'; then $(CYGPATH_W) 'torrent/tracker_controller_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/tracker_controller_test.cc'; fi`
+
+LibTorrentTest-tracker_list_test.o: torrent/tracker_list_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-tracker_list_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-tracker_list_test.Tpo -c -o LibTorrentTest-tracker_list_test.o `test -f 'torrent/tracker_list_test.cc' || echo '$(srcdir)/'`torrent/tracker_list_test.cc
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-tracker_list_test.Tpo $(DEPDIR)/LibTorrentTest-tracker_list_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/tracker_list_test.cc' object='LibTorrentTest-tracker_list_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-tracker_list_test.o `test -f 'torrent/tracker_list_test.cc' || echo '$(srcdir)/'`torrent/tracker_list_test.cc
+
+LibTorrentTest-tracker_list_test.obj: torrent/tracker_list_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-tracker_list_test.obj -MD -MP -MF $(DEPDIR)/LibTorrentTest-tracker_list_test.Tpo -c -o LibTorrentTest-tracker_list_test.obj `if test -f 'torrent/tracker_list_test.cc'; then $(CYGPATH_W) 'torrent/tracker_list_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/tracker_list_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-tracker_list_test.Tpo $(DEPDIR)/LibTorrentTest-tracker_list_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/tracker_list_test.cc' object='LibTorrentTest-tracker_list_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-tracker_list_test.obj `if test -f 'torrent/tracker_list_test.cc'; then $(CYGPATH_W) 'torrent/tracker_list_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/tracker_list_test.cc'; fi`
+
+LibTorrentTest-tracker_timeout_test.o: torrent/tracker_timeout_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-tracker_timeout_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-tracker_timeout_test.Tpo -c -o LibTorrentTest-tracker_timeout_test.o `test -f 'torrent/tracker_timeout_test.cc' || echo '$(srcdir)/'`torrent/tracker_timeout_test.cc
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-tracker_timeout_test.Tpo $(DEPDIR)/LibTorrentTest-tracker_timeout_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/tracker_timeout_test.cc' object='LibTorrentTest-tracker_timeout_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-tracker_timeout_test.o `test -f 'torrent/tracker_timeout_test.cc' || echo '$(srcdir)/'`torrent/tracker_timeout_test.cc
+
+LibTorrentTest-tracker_timeout_test.obj: torrent/tracker_timeout_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-tracker_timeout_test.obj -MD -MP -MF $(DEPDIR)/LibTorrentTest-tracker_timeout_test.Tpo -c -o LibTorrentTest-tracker_timeout_test.obj `if test -f 'torrent/tracker_timeout_test.cc'; then $(CYGPATH_W) 'torrent/tracker_timeout_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/tracker_timeout_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-tracker_timeout_test.Tpo $(DEPDIR)/LibTorrentTest-tracker_timeout_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/tracker_timeout_test.cc' object='LibTorrentTest-tracker_timeout_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-tracker_timeout_test.obj `if test -f 'torrent/tracker_timeout_test.cc'; then $(CYGPATH_W) 'torrent/tracker_timeout_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/tracker_timeout_test.cc'; fi`
+
+LibTorrentTest-log_test.o: torrent/utils/log_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-log_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-log_test.Tpo -c -o LibTorrentTest-log_test.o `test -f 'torrent/utils/log_test.cc' || echo '$(srcdir)/'`torrent/utils/log_test.cc
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-log_test.Tpo $(DEPDIR)/LibTorrentTest-log_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/utils/log_test.cc' object='LibTorrentTest-log_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-log_test.o `test -f 'torrent/utils/log_test.cc' || echo '$(srcdir)/'`torrent/utils/log_test.cc
+
+LibTorrentTest-log_test.obj: torrent/utils/log_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-log_test.obj -MD -MP -MF $(DEPDIR)/LibTorrentTest-log_test.Tpo -c -o LibTorrentTest-log_test.obj `if test -f 'torrent/utils/log_test.cc'; then $(CYGPATH_W) 'torrent/utils/log_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/utils/log_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-log_test.Tpo $(DEPDIR)/LibTorrentTest-log_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/utils/log_test.cc' object='LibTorrentTest-log_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-log_test.obj `if test -f 'torrent/utils/log_test.cc'; then $(CYGPATH_W) 'torrent/utils/log_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/utils/log_test.cc'; fi`
+
+LibTorrentTest-option_strings_test.o: torrent/utils/option_strings_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-option_strings_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-option_strings_test.Tpo -c -o LibTorrentTest-option_strings_test.o `test -f 'torrent/utils/option_strings_test.cc' || echo '$(srcdir)/'`torrent/utils/option_strings_test.cc
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-option_strings_test.Tpo $(DEPDIR)/LibTorrentTest-option_strings_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/utils/option_strings_test.cc' object='LibTorrentTest-option_strings_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-option_strings_test.o `test -f 'torrent/utils/option_strings_test.cc' || echo '$(srcdir)/'`torrent/utils/option_strings_test.cc
+
+LibTorrentTest-option_strings_test.obj: torrent/utils/option_strings_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-option_strings_test.obj -MD -MP -MF $(DEPDIR)/LibTorrentTest-option_strings_test.Tpo -c -o LibTorrentTest-option_strings_test.obj `if test -f 'torrent/utils/option_strings_test.cc'; then $(CYGPATH_W) 'torrent/utils/option_strings_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/utils/option_strings_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-option_strings_test.Tpo $(DEPDIR)/LibTorrentTest-option_strings_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='torrent/utils/option_strings_test.cc' object='LibTorrentTest-option_strings_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-option_strings_test.obj `if test -f 'torrent/utils/option_strings_test.cc'; then $(CYGPATH_W) 'torrent/utils/option_strings_test.cc'; else $(CYGPATH_W) '$(srcdir)/torrent/utils/option_strings_test.cc'; fi`
+
+LibTorrentTest-tracker_http_test.o: tracker/tracker_http_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-tracker_http_test.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-tracker_http_test.Tpo -c -o LibTorrentTest-tracker_http_test.o `test -f 'tracker/tracker_http_test.cc' || echo '$(srcdir)/'`tracker/tracker_http_test.cc
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-tracker_http_test.Tpo $(DEPDIR)/LibTorrentTest-tracker_http_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='tracker/tracker_http_test.cc' object='LibTorrentTest-tracker_http_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-tracker_http_test.o `test -f 'tracker/tracker_http_test.cc' || echo '$(srcdir)/'`tracker/tracker_http_test.cc
+
+LibTorrentTest-tracker_http_test.obj: tracker/tracker_http_test.cc
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-tracker_http_test.obj -MD -MP -MF $(DEPDIR)/LibTorrentTest-tracker_http_test.Tpo -c -o LibTorrentTest-tracker_http_test.obj `if test -f 'tracker/tracker_http_test.cc'; then $(CYGPATH_W) 'tracker/tracker_http_test.cc'; else $(CYGPATH_W) '$(srcdir)/tracker/tracker_http_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/LibTorrentTest-tracker_http_test.Tpo $(DEPDIR)/LibTorrentTest-tracker_http_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='tracker/tracker_http_test.cc' object='LibTorrentTest-tracker_http_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -c -o LibTorrentTest-tracker_http_test.obj `if test -f 'tracker/tracker_http_test.cc'; then $(CYGPATH_W) 'tracker/tracker_http_test.cc'; else $(CYGPATH_W) '$(srcdir)/tracker/tracker_http_test.cc'; fi`
 
 LibTorrentTest-main.o: main.cc
 @am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(LibTorrentTest_CXXFLAGS) $(CXXFLAGS) -MT LibTorrentTest-main.o -MD -MP -MF $(DEPDIR)/LibTorrentTest-main.Tpo -c -o LibTorrentTest-main.o `test -f 'main.cc' || echo '$(srcdir)/'`main.cc

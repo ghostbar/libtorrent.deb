@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -195,10 +195,7 @@ HandshakeManager::receive_succeeded(Handshake* handshake) {
   PeerConnectionBase* pcb;
 
   if (download->info()->is_active() &&
-
-      // We need to make libtorrent more selective in the clients it
-      // connects to, and to move this somewhere else.
-      (!download->file_list()->is_done() || !handshake->bitfield()->is_all_set() || download->initial_seeding() != NULL) &&
+      download->connection_list()->want_connection(handshake->peer_info(), handshake->bitfield()) &&
 
       (pcb = download->connection_list()->insert(handshake->peer_info(),
                                                  handshake->get_fd(),

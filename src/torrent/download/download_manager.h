@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -42,6 +42,7 @@
 
 namespace torrent {
 
+class ChunkList;
 class DownloadWrapper;
 class DownloadInfo;
 class DownloadMain;
@@ -75,6 +76,8 @@ public:
   iterator            find(const std::string& hash);
   iterator            find(const HashString& hash);
   iterator            find(DownloadInfo* info);
+
+  iterator            find_chunk_list(ChunkList* cl);
 
   DownloadMain*       find_main(const char* hash);
   DownloadMain*       find_main_obfuscated(const char* hash);

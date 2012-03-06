@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -166,11 +166,12 @@ ChunkManager::deallocate(uint32_t size, int flags) {
   if (size > m_memoryUsage)
     throw internal_error("ChunkManager::deallocate(...) size > m_memoryUsage.");
 
-  if (log_files[LOG_MINCORE_STATS].is_open() && !(flags & allocate_dont_log))
+  if (log_files[LOG_MINCORE_STATS].is_open() && !(flags & allocate_dont_log)) {
     if (flags & allocate_revert_log)
       log_mincore_stats_func_alloc(-size);
     else
       log_mincore_stats_func_dealloc(size);
+  }
 
   m_memoryUsage -= size;
   m_memoryBlockCount--;

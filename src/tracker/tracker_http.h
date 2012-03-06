@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -48,19 +48,25 @@ class Http;
 
 class TrackerHttp : public Tracker {
 public:
-  TrackerHttp(TrackerList* parent, const std::string& url);
+  TrackerHttp(TrackerList* parent, const std::string& url, int flags);
   ~TrackerHttp();
   
   virtual bool        is_busy() const;
 
   virtual void        send_state(int state);
+  virtual void        send_scrape();
   virtual void        close();
 
   virtual Type        type() const;
 
 private:
+  void                request_prefix(std::stringstream* stream, const std::string& url);
+
   void                receive_done();
   void                receive_failed(std::string msg);
+
+  void                process_success(const Object& object);
+  void                process_scrape(const Object& object);
 
   Http*               m_get;
   std::stringstream*  m_data;

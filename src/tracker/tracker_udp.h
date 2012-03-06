@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2007, Jari Sundell
+// Copyright (C) 2005-2011, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -54,7 +54,7 @@ public:
 
   static const uint64_t magic_connection_id = 0x0000041727101980ll;
 
-  TrackerUdp(TrackerList* parent, const std::string& url);
+  TrackerUdp(TrackerList* parent, const std::string& url, int flags);
   ~TrackerUdp();
   
   virtual bool        is_busy() const;
