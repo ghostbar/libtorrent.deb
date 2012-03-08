@@ -4,7 +4,7 @@ Upstream-Contact: Jari Sundell <jaris@ifi.uio.no>
 Source: http://libtorrent.rakshasa.no/
 
 Files: *
-Copyright: © 2005-2007 Jari Sundell <jaris@ifi.uio.no>
+Copyright: © 2005-2011 Jari Sundell <jaris@ifi.uio.no>
 License: GPL-2+ with OpenSSL exception
 
 Files: debian/*
