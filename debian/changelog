@@ -1,8 +1,11 @@
 libtorrent (0.13.0-1) experimental; urgency=low
 
   * New upstream version.
+  * Drop all debian/patches:
+    + disable-tests: debian/rules has been modified not to run the test suite.
+    + All the other patches have been applied upstream.
 
- -- Benoît Knecht <benoit.knecht@fsfe.org>  Thu, 08 Mar 2012 13:54:23 +0100
+ -- Benoît Knecht <benoit.knecht@fsfe.org>  Thu, 08 Mar 2012 14:22:08 +0100
 
 libtorrent (0.12.9-3) unstable; urgency=medium
 
