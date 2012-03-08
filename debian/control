@@ -8,7 +8,7 @@ Uploaders:
  Rogério Brito <rbrito@ime.usp.br>,
  Dmitry E. Oboukhov <unera@debian.org>
 Build-Depends:
- debhelper (>= 7.0.50~),
+ debhelper (>= 9),
  dh-autoreconf,
  libcppunit-dev,
  libcurl4-openssl-dev,
@@ -36,6 +36,8 @@ Description: C++ BitTorrent library by Rakshasa (development files)
 
 Package: libtorrent14
 Architecture: any
+Pre-Depends: ${misc:Pre-Depends}
+Multi-Arch: same
 Depends:
  ${misc:Depends},
  ${shlibs:Depends}
