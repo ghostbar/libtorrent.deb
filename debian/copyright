@@ -7,6 +7,10 @@ Files: *
 Copyright: © 2005-2011 Jari Sundell <jaris@ifi.uio.no>
 License: GPL-2+ with OpenSSL exception
 
+Files: ltmain.sh
+Copyright: © 1996-2011 Free Software Foundation, Inc.
+License: GPL-2+
+
 Files: debian/*
 Copyright: © 2005-2006 Qingning Huo <qhuo@mayhq.co.uk>
 	   © 2006-2008 Jose Luis Rivas <ghostbar38@gmail.com>
