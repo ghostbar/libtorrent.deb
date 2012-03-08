@@ -4,8 +4,22 @@ libtorrent (0.13.0-1) experimental; urgency=low
   * Drop all debian/patches:
     + disable-tests: debian/rules has been modified not to run the test suite.
     + All the other patches have been applied upstream.
+  * Use autoreconf as part of the build process.
+    + Build-Depend on dh-autoreconf.
+  * Bump Standards-Version to 3.9.3.
+    + Update DEP-5 Format URL.
+  * debian/copyright:
+    + Update copyright dates.
+    + Add copyright information for ltmain.sh.
+    + Use standalone License paragraphs.
+    + Include a copy of the MPL-1.1 in debian/MPL-1.1.
+  * Convert to multiarch:
+    + Use debhelper compat 9.
+    + Make libtorrent14 Pre-Depend on ${misc:Pre-Depends}.
+    + Use /usr/lib/*/ instead of /usr/lib/ in debian/*.install.
+    + Mark libtorrent14 Multi-Arch: same.
 
- -- Benoît Knecht <benoit.knecht@fsfe.org>  Thu, 08 Mar 2012 14:22:08 +0100
+ -- Benoît Knecht <benoit.knecht@fsfe.org>  Thu, 08 Mar 2012 17:28:29 +0100
 
 libtorrent (0.12.9-3) unstable; urgency=medium
 
