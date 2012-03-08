@@ -9,6 +9,7 @@ Uploaders:
  Dmitry E. Oboukhov <unera@debian.org>
 Build-Depends:
  debhelper (>= 7.0.50~),
+ dh-autoreconf,
  libcppunit-dev,
  libcurl4-openssl-dev,
  libsigc++-2.0-dev,
