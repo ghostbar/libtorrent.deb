@@ -12,9 +12,7 @@ endif
 override_dh_auto_configure:
 	dh_auto_configure -- --enable-ipv6 $(OPTIONS)
 
-override_dh_clean:
-	dh_clean
-	rm -fr test/Makefile
-
 override_dh_installchangelogs:
 	dh_installchangelogs debian/ChangeLog
+
+override_dh_auto_test:
