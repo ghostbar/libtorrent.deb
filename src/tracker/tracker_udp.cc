@@ -36,6 +36,8 @@
 
 #include "config.h"
 
+#define __STDC_FORMAT_MACROS
+
 #include <sys/types.h>
 
 #include <sigc++/adaptors/bind.h>
@@ -49,9 +51,16 @@
 #include "torrent/poll.h"
 #include "torrent/tracker_list.h"
 #include "torrent/utils/log.h"
+#include "torrent/utils/option_strings.h"
 
 #include "tracker_udp.h"
 #include "manager.h"
+
+#define LT_LOG_TRACKER(log_level, log_fmt, ...)                         \
+  lt_log_print_info(LOG_TRACKER_##log_level, m_parent->info(), "tracker", "[%u] " log_fmt, group(), __VA_ARGS__);
+
+#define LT_LOG_TRACKER_DUMP(log_level, log_dump_data, log_dump_size, log_fmt, ...)                   \
+  lt_log_print_info_dump(LOG_TRACKER_##log_level, log_dump_data, log_dump_size, m_parent->info(), "tracker", "[%u] " log_fmt, group(), __VA_ARGS__);
 
 namespace torrent {
 
@@ -62,14 +71,14 @@ TrackerUdp::TrackerUdp(TrackerList* parent, const std::string& url, int flags) :
   m_readBuffer(NULL),
   m_writeBuffer(NULL) {
 
-  m_taskTimeout.set_slot(rak::mem_fn(this, &TrackerUdp::receive_timeout));
+  m_taskTimeout.slot() = std::tr1::bind(&TrackerUdp::receive_timeout, this);
 }
 
 TrackerUdp::~TrackerUdp() {
   if (m_slotResolver != NULL)
     static_cast<ConnectionManager::slot_resolver_result_type*>(m_slotResolver)->blocked();
 
-  close();
+  close_directly();
 }
   
 bool
@@ -79,7 +88,7 @@ TrackerUdp::is_busy() const {
 
 void
 TrackerUdp::send_state(int state) {
-  close();
+  close_directly();
   m_latest_event = state;
 
   char hostname[1024];
@@ -136,6 +145,28 @@ TrackerUdp::close() {
   if (!get_fd().is_valid())
     return;
 
+  LT_LOG_TRACKER(DEBUG, "Tracker UDP request cancelled: state:%s url:%s.",
+                 option_as_string(OPTION_TRACKER_EVENT, m_latest_event), m_url.c_str());
+
+  close_directly();
+}
+
+void
+TrackerUdp::disown() {
+  if (!get_fd().is_valid())
+    return;
+
+  LT_LOG_TRACKER(DEBUG, "Tracker UDP request disowned: state:%s url:%s.",
+                 option_as_string(OPTION_TRACKER_EVENT, m_latest_event), m_url.c_str());
+
+  close_directly();
+}
+
+void
+TrackerUdp::close_directly() {
+  if (!get_fd().is_valid())
+    return;
+
   delete m_readBuffer;
   delete m_writeBuffer;
 
@@ -160,7 +191,7 @@ TrackerUdp::type() const {
 
 void
 TrackerUdp::receive_failed(const std::string& msg) {
-  close();
+  close_directly();
   m_parent->receive_failed(this, msg);
 }
 
@@ -190,7 +221,7 @@ TrackerUdp::event_read() {
   m_readBuffer->reset_position();
   m_readBuffer->set_end(s);
 
-  lt_log_print(LOG_TRACKER_DEBUG, "--- Tracker UDP received ---\n%*s\n---", s, (const char*)m_readBuffer->begin());
+  LT_LOG_TRACKER_DUMP(DEBUG, (const char*)m_readBuffer->begin(), s, "Tracker UDP reply.", 0);
 
   if (s < 4)
     return;
@@ -236,8 +267,6 @@ TrackerUdp::event_write() {
 
   int __UNUSED s = write_datagram(m_writeBuffer->begin(), m_writeBuffer->size_end(), &m_connectAddress);
 
-  lt_log_print(LOG_TRACKER_DEBUG, "--- Tracker UDP send ---\n%*s\n---", m_readBuffer->size_end(), (const char*)m_readBuffer->begin());
-
   // TODO: If send failed, retry shortly or do i call receive_failed?
   // if (s != m_writeBuffer->size_end())
   //   ;
@@ -255,6 +284,9 @@ TrackerUdp::prepare_connect_input() {
   m_writeBuffer->write_64(m_connectionId = magic_connection_id);
   m_writeBuffer->write_32(m_action = 0);
   m_writeBuffer->write_32(m_transactionId = random());
+
+  LT_LOG_TRACKER_DUMP(DEBUG, m_writeBuffer->begin(), m_writeBuffer->size_end(),
+                      "Tracker UDP connect: id:%" PRIx32 ".", m_transactionId);
 }
 
 void
@@ -270,9 +302,13 @@ TrackerUdp::prepare_announce_input() {
   m_writeBuffer->write_range(info->hash().begin(), info->hash().end());
   m_writeBuffer->write_range(info->local_id().begin(), info->local_id().end());
 
-  m_writeBuffer->write_64(info->completed_adjusted());
-  m_writeBuffer->write_64(info->slot_left()());
-  m_writeBuffer->write_64(info->uploaded_adjusted());
+  uint64_t uploaded_adjusted = info->uploaded_adjusted();
+  uint64_t completed_adjusted = info->completed_adjusted();
+  uint64_t download_left = info->slot_left()();
+
+  m_writeBuffer->write_64(completed_adjusted);
+  m_writeBuffer->write_64(download_left);
+  m_writeBuffer->write_64(uploaded_adjusted);
   m_writeBuffer->write_32(m_sendState);
 
   const rak::socket_address* localAddress = rak::socket_address::cast_from(manager->connection_manager()->local_address());
@@ -288,6 +324,11 @@ TrackerUdp::prepare_announce_input() {
 
   if (m_writeBuffer->size_end() != 98)
     throw internal_error("TrackerUdp::prepare_announce_input() ended up with the wrong size");
+
+  LT_LOG_TRACKER_DUMP(DEBUG, m_writeBuffer->begin(), m_writeBuffer->size_end(),
+                      "Tracker UDP announce: state:%s id:%" PRIx32 " up_adj:%" PRIu64 " completed_adj:%" PRIu64 " left_adj:%" PRIu64 ".",
+                      option_as_string(OPTION_TRACKER_EVENT, m_sendState),
+                      m_transactionId, uploaded_adjusted, completed_adjusted, download_left);
 }
 
 bool
@@ -321,7 +362,7 @@ TrackerUdp::process_announce_output() {
 
   // Some logic here to decided on whetever we're going to close the
   // connection or not?
-  close();
+  close_directly();
   m_parent->receive_success(this, &l);
 
   return true;

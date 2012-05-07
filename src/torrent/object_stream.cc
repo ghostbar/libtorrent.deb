@@ -41,7 +41,6 @@
 #include <cmath>
 #include <limits>
 #include <rak/algorithm.h>
-#include <rak/functional.h>
 #include <rak/string_manip.h>
 
 #include "utils/sha1.h"
@@ -71,11 +70,15 @@ object_read_string(std::istream* input, std::string& str) {
 const char*
 object_read_bencode_c_value(const char* first, const char* last, int64_t& value) {
   if (first == last)
-    return last;
+    return first;
 
   bool neg = false;
 
   if (*first == '-') {
+    // Don't allow '-0', or '-' followed by non-numeral.
+    if ((first + 1) == last || *(first + 1) <= '0' || *(first + 1) > '9')
+      return first;
+
     neg = true;
     first++;
   }
@@ -318,7 +321,12 @@ object_read_bencode_skip_c(const char* first, const char* last) {
 
     switch (*first) {
     case 'i':
-      first = std::find_if(first + 1, last, &object_is_not_digit);
+      if (first != last && *++first == '-') {
+        if (first != last && *++first == '0')
+          throw torrent::bencode_error("Invalid bencode data.");
+      }
+
+      first = std::find_if(first, last, &object_is_not_digit);
 
       if (first == last || *first++ != 'e')
         throw torrent::bencode_error("Invalid bencode data.");

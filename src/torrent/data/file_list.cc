@@ -36,6 +36,8 @@
 
 #include "config.h"
 
+#define __STDC_FORMAT_MACROS
+
 #include <algorithm>
 #include <cstring>
 #include <functional>
@@ -53,12 +55,16 @@
 
 #include "torrent/exceptions.h"
 #include "torrent/path.h"
+#include "torrent/utils/log.h"
 
 #include "file.h"
 #include "file_list.h"
 #include "file_manager.h"
 #include "manager.h"
 #include "piece.h"
+
+#define LT_LOG_FL(log_level, log_fmt, ...)                              \
+  lt_log_print_data(LOG_STORAGE_##log_level, (&m_data), "file_list", log_fmt, __VA_ARGS__);
 
 namespace torrent {
 
@@ -396,6 +402,8 @@ void
 FileList::open(int flags) {
   typedef std::set<const char*, file_list_cstr_less> path_set;
 
+  LT_LOG_FL(INFO, "Opening.", 0);
+
   if (m_rootDir.empty())
     throw internal_error("FileList::open() m_rootDir.empty().");
 
@@ -404,11 +412,13 @@ FileList::open(int flags) {
   Path lastPath;
   path_set pathSet;
 
+  iterator itr = end();
+
   try {
     if (!(flags & open_no_create) && !make_root_path())
       throw storage_error("Could not create directory '" + m_rootDir + "': " + std::strerror(errno));
   
-    for (iterator itr = begin(), last = end(); itr != last; ++itr) {
+    for (itr = begin(); itr != end(); ++itr) {
       File* entry = *itr;
 
       // We no longer consider it an error to open a previously opened
@@ -428,13 +438,13 @@ FileList::open(int flags) {
         entry->set_frozen_path(m_rootDir + entry->path()->as_string());
 
       if (!pathSet.insert(entry->frozen_path().c_str()).second)
-        throw storage_error("Found a duplicate filename.");
+        throw storage_error("Duplicate filename found.");
 
       if (entry->size_bytes() > m_maxFileSize)
-        throw storage_error("Found a file exceeding max file size.");
+        throw storage_error("File exceedes the configured max file size.");
 
       if (entry->path()->empty())
-        throw storage_error("Found an empty filename.");
+        throw storage_error("Empty filename is not allowed.");
 
       // Handle directory creation outside of open_file, so we can do
       // it here if necessary.
@@ -446,7 +456,7 @@ FileList::open(int flags) {
         // being set or not.
         if (!(flags & open_no_create))
           // Also check if open_require_all_open is set.
-          throw storage_error("Could not open file \"" + m_rootDir + entry->path()->as_string() + "\": " + rak::error_number::current().c_str());
+          throw storage_error("Could not open file: " + std::string(rak::error_number::current().c_str()));
 
         // Don't set the lastPath as we haven't created the directory.
         continue;
@@ -456,9 +466,15 @@ FileList::open(int flags) {
     }
 
   } catch (local_error& e) {
-    for (iterator itr = begin(), last = end(); itr != last; ++itr) {
-      (*itr)->unset_flags_protected(File::flag_active);
-      manager->file_manager()->close(*itr);
+    for (iterator itr2 = begin(), last = end(); itr2 != last; ++itr2) {
+      (*itr2)->unset_flags_protected(File::flag_active);
+      manager->file_manager()->close(*itr2);
+    }
+
+    if (itr == end()) {
+      LT_LOG_FL(ERROR, "Failed to prepare file list: %s", e.what());
+    } else {
+      LT_LOG_FL(ERROR, "Failed to prepare file '%s': %s", (*itr)->path()->as_string().c_str(), e.what());
     }
 
     // Set to false here in case we tried to open the FileList for the
@@ -489,6 +505,8 @@ void
 FileList::close() {
   if (!is_open())
     return;
+
+  LT_LOG_FL(INFO, "Closing.", 0);
 
   for (iterator itr = begin(), last = end(); itr != last; ++itr) {
     (*itr)->unset_flags_protected(File::flag_active);
@@ -627,14 +645,22 @@ FileList::create_chunk_index(uint32_t index, int prot) {
 
 void
 FileList::mark_completed(uint32_t index) {
+  if (index >= size_chunks() || completed_chunks() >= size_chunks())
+    throw internal_error("FileList::mark_completed(...) received an invalid index.");
+
+  if (bitfield()->empty())
+    throw internal_error("FileList::mark_completed(...) bitfield is empty.");
+
+  if (bitfield()->size_bits() != size_chunks())
+    throw internal_error("FileList::mark_completed(...) bitfield is not the right size.");
+
   if (bitfield()->get(index))
     throw internal_error("FileList::mark_completed(...) received a chunk that has already been finished.");
 
   if (bitfield()->size_set() >= bitfield()->size_bits())
     throw internal_error("FileList::mark_completed(...) bitfield()->size_set() >= bitfield()->size_bits().");
 
-  if (index >= size_chunks() || completed_chunks() >= size_chunks())
-    throw internal_error("FileList::mark_completed(...) received an invalid index.");
+  LT_LOG_FL(DEBUG, "Done chunk: index:%" PRIu32 ".", index);
 
   m_data.mutable_completed_bitfield()->set(index);
   inc_completed(begin(), index);
@@ -694,11 +720,17 @@ FileList::update_completed() {
 
 void
 FileList::reset_filesize(int64_t size) {
+  LT_LOG_FL(INFO, "Resetting torrent size: size:%" PRIi64 ".", size);
+
   close();
   m_chunkSize = size;
   m_torrentSize = size;
   (*begin())->set_size_bytes(size);
   (*begin())->set_range(m_chunkSize);
+
+  m_data.mutable_completed_bitfield()->allocate();
+  m_data.mutable_completed_bitfield()->unset_all();
+  
   open(open_no_create);
 }
 

@@ -57,11 +57,14 @@ public:
   TrackerUdp(TrackerList* parent, const std::string& url, int flags);
   ~TrackerUdp();
   
+  const char*         type_name() const { return "tracker_udp"; }
+
   virtual bool        is_busy() const;
 
   virtual void        send_state(int state);
 
   virtual void        close();
+  virtual void        disown();
 
   virtual Type        type() const;
 
@@ -70,6 +73,8 @@ public:
   virtual void        event_error();
 
 private:
+  void                close_directly();
+
   void                receive_failed(const std::string& msg);
   void                receive_timeout();
 

@@ -56,10 +56,13 @@ public:
   virtual void        send_state(int state);
   virtual void        send_scrape();
   virtual void        close();
+  virtual void        disown();
 
   virtual Type        type() const;
 
 private:
+  void                close_directly();
+
   void                request_prefix(std::stringstream* stream, const std::string& url);
 
   void                receive_done();

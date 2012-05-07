@@ -39,7 +39,6 @@
 #define __STDC_FORMAT_MACROS
 
 #include <inttypes.h>
-#include <rak/functional.h>
 #include <sigc++/adaptors/bind.h>
 #include <sigc++/adaptors/hide.h>
 
@@ -70,6 +69,9 @@
 #include "throttle.h"
 #include "tracker_list.h"
 
+#define LT_LOG_THIS(log_level, log_fmt, ...)                         \
+  lt_log_print_info(LOG_TORRENT_##log_level, m_ptr->info(), "download", log_fmt, __VA_ARGS__);
+
 namespace torrent {
 
 const DownloadInfo* Download::info() const { return m_ptr->info(); }
@@ -79,6 +81,8 @@ void
 Download::open(int flags) {
   if (m_ptr->info()->is_open())
     return;
+
+  LT_LOG_THIS(INFO, "Opening torrent: flags:%0x.", flags);
 
   // Currently always open with no_create, as start will make sure
   // they are created. Need to fix this.
@@ -103,6 +107,7 @@ Download::close(int flags) {
   if (m_ptr->info()->is_active())
     stop(0);
 
+  LT_LOG_THIS(INFO, "Closing torrent: flags:%0x.", flags);
   m_ptr->close();
 }
 
@@ -116,8 +121,13 @@ Download::start(int flags) {
   if (!info->is_open())
     throw internal_error("Tried to start a closed download.");
 
+  if (m_ptr->data()->mutable_completed_bitfield()->empty())
+    throw internal_error("Tried to start a download with empty bitfield.");
+
   if (info->is_active())
     return;
+
+  LT_LOG_THIS(INFO, "Starting torrent: flags:%0x.", flags);
 
   m_ptr->data()->verify_wanted_chunks("Download::start(...)");
 
@@ -134,7 +144,7 @@ Download::start(int flags) {
   }
 
   m_ptr->main()->start();
-  m_ptr->main()->tracker_controller()->enable();
+  m_ptr->main()->tracker_controller()->enable((flags & start_skip_tracker) ? TrackerController::enable_dont_reset_stats : 0);
 
   // Reset the uploaded/download baseline when we restart the download
   // so that broken trackers get the right uploaded ratio.
@@ -143,7 +153,7 @@ Download::start(int flags) {
     info->set_completed_baseline(m_ptr->main()->file_list()->completed_bytes());
 
     lt_log_print_info(LOG_TRACKER_INFO, info,
-                      "->download: Setting new baseline on start: uploaded:%" PRIu64 " completed:%" PRIu64 ".",
+                      "download", "Setting new baseline on start: uploaded:%" PRIu64 " completed:%" PRIu64 ".",
                       info->uploaded_baseline(), info->completed_baseline());
   }
 
@@ -155,6 +165,8 @@ void
 Download::stop(int flags) {
   if (!m_ptr->info()->is_active())
     return;
+
+  LT_LOG_THIS(INFO, "Stopping torrent: flags:%0x.", flags);
 
   m_ptr->main()->stop();
   m_ptr->main()->tracker_controller()->disable();
@@ -176,6 +188,8 @@ Download::hash_check(bool tryQuick) {
 
   Bitfield* bitfield = m_ptr->data()->mutable_completed_bitfield();
 
+  LT_LOG_THIS(INFO, "Checking hash: allocated:%i try_quick:%i.", !bitfield->empty(), (int)tryQuick);
+
   if (bitfield->empty()) {
     // The bitfield still hasn't been allocated, so no resume data was
     // given. 
@@ -196,8 +210,10 @@ Download::hash_stop() {
   if (!m_ptr->hash_checker()->is_checking())
     return;
 
+  LT_LOG_THIS(INFO, "Hashing stopped.", 0);
+
   m_ptr->hash_checker()->hashing_ranges().erase(0, m_ptr->hash_checker()->position());
-  m_ptr->hash_queue()->remove(m_ptr);
+  m_ptr->hash_queue()->remove(m_ptr->data());
 
   m_ptr->hash_checker()->clear();
 }

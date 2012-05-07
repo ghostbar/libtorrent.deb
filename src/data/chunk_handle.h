@@ -47,13 +47,15 @@ class ChunkListNode;
 
 class ChunkHandle {
 public:
-  ChunkHandle(ChunkListNode* c = NULL, bool wr = false) :
-    m_node(c), m_writable(wr) {}
+  ChunkHandle(ChunkListNode* c = NULL, bool wr = false, bool blk = false) :
+    m_node(c), m_writable(wr), m_blocking(blk) {}
 
   bool                is_valid() const                      { return m_node != NULL; }
+  bool                is_loaded() const                     { return m_node != NULL && m_node->is_valid(); }
   bool                is_writable() const                   { return m_writable; }
+  bool                is_blocking() const                   { return m_blocking; }
   
-  void                clear()                               { m_node = NULL; }
+  void                clear()                               { m_node = NULL; m_writable = false; m_blocking = false; }
 
   rak::error_number   error_number() const                  { return m_errorNumber; }
   void                set_error_number(rak::error_number e) { m_errorNumber = e; }
@@ -68,6 +70,7 @@ public:
 private:
   ChunkListNode*      m_node;
   bool                m_writable;
+  bool                m_blocking;
 
   rak::error_number   m_errorNumber;
 };

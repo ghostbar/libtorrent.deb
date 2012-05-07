@@ -22,10 +22,7 @@ class tracker_list_test : public CppUnit::TestFixture {
   CPPUNIT_TEST(test_scrape_success);
   CPPUNIT_TEST(test_scrape_failure);
 
-  CPPUNIT_TEST(test_new_peers);
   CPPUNIT_TEST(test_has_active);
-  CPPUNIT_TEST(test_find_next_to_request);
-  CPPUNIT_TEST(test_count_active);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -49,10 +46,7 @@ public:
   void test_scrape_success();
   void test_scrape_failure();
 
-  void test_new_peers();
   void test_has_active();
-  void test_find_next_to_request();
-  void test_count_active();
 };
 
 class TrackerTest : public torrent::Tracker {
@@ -91,6 +85,7 @@ public:
   virtual void        send_state(int state) { m_busy = true; m_open = true; m_requesting_state = m_latest_event = state; }
   virtual void        send_scrape()         { m_busy = true; m_open = true; m_requesting_state = m_latest_event = torrent::Tracker::EVENT_SCRAPE; }
   virtual void        close()               { m_busy = false; m_open = false; m_requesting_state = -1; }
+  virtual void        disown()              { m_busy = false; m_open = false; m_requesting_state = -1; }
 
 private:
   bool                m_busy;
@@ -100,3 +95,62 @@ private:
 
 extern uint32_t return_new_peers;
 inline uint32_t increment_value(int* value) { (*value)++; return return_new_peers; }
+
+bool check_has_active_in_group(const torrent::TrackerList* tracker_list, const char* states, bool scrape);
+
+#define TRACKER_SETUP()                                                 \
+  torrent::TrackerList tracker_list;                                    \
+  int success_counter = 0;                                              \
+  int failure_counter = 0;                                              \
+  int scrape_success_counter = 0;                                       \
+  int scrape_failure_counter = 0;                                       \
+  tracker_list.slot_success() = tr1::bind(&increment_value, &success_counter); \
+  tracker_list.slot_failure() = tr1::bind(&increment_value, &failure_counter); \
+  tracker_list.slot_scrape_success() = tr1::bind(&increment_value, &scrape_success_counter); \
+  tracker_list.slot_scrape_failure() = tr1::bind(&increment_value, &scrape_failure_counter);
+
+#define TRACKER_INSERT(group, name)                             \
+  TrackerTest* name = new TrackerTest(&tracker_list, "");       \
+  tracker_list.insert(group, name);
+
+#define TEST_TRACKER_IS_BUSY(tracker, state)            \
+  CPPUNIT_ASSERT(state == '0' ||  tracker->is_busy());  \
+  CPPUNIT_ASSERT(state == '1' || !tracker->is_busy());
+
+#define TEST_MULTI3_IS_BUSY(original, rearranged)                 \
+  TEST_TRACKER_IS_BUSY(tracker_0_0, original[0]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_0_1, original[1]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_1_0, original[2]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_2_0, original[3]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_3_0, original[4]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_list[0], rearranged[0]);           \
+  TEST_TRACKER_IS_BUSY(tracker_list[1], rearranged[1]);           \
+  TEST_TRACKER_IS_BUSY(tracker_list[2], rearranged[2]);           \
+  TEST_TRACKER_IS_BUSY(tracker_list[3], rearranged[3]);           \
+  TEST_TRACKER_IS_BUSY(tracker_list[4], rearranged[4]);
+
+#define TEST_GROUP_IS_BUSY(original, rearranged)                  \
+  TEST_TRACKER_IS_BUSY(tracker_0_0, original[0]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_0_1, original[1]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_0_2, original[2]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_1_0, original[3]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_1_1, original[4]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_2_0, original[5]);                 \
+  TEST_TRACKER_IS_BUSY(tracker_list[0], rearranged[0]);           \
+  TEST_TRACKER_IS_BUSY(tracker_list[1], rearranged[1]);           \
+  TEST_TRACKER_IS_BUSY(tracker_list[2], rearranged[2]);           \
+  TEST_TRACKER_IS_BUSY(tracker_list[3], rearranged[3]);           \
+  TEST_TRACKER_IS_BUSY(tracker_list[4], rearranged[4]);           \
+  TEST_TRACKER_IS_BUSY(tracker_list[5], rearranged[5]);
+
+#define TEST_TRACKERS_IS_BUSY_5(original, rearranged)   \
+  TEST_TRACKER_IS_BUSY(tracker_0, original[0]);         \
+  TEST_TRACKER_IS_BUSY(tracker_1, original[1]);         \
+  TEST_TRACKER_IS_BUSY(tracker_2, original[2]);         \
+  TEST_TRACKER_IS_BUSY(tracker_3, original[3]);         \
+  TEST_TRACKER_IS_BUSY(tracker_4, original[4]);         \
+  TEST_TRACKER_IS_BUSY(tracker_list[0], rearranged[0]); \
+  TEST_TRACKER_IS_BUSY(tracker_list[1], rearranged[1]); \
+  TEST_TRACKER_IS_BUSY(tracker_list[2], rearranged[2]); \
+  TEST_TRACKER_IS_BUSY(tracker_list[3], rearranged[3]); \
+  TEST_TRACKER_IS_BUSY(tracker_list[4], rearranged[4]);

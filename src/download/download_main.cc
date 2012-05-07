@@ -64,7 +64,7 @@
 #include "download_main.h"
 #include "download_wrapper.h"
 
-namespace std { using namespace tr1; }
+namespace tr1 { using namespace std::tr1; }
 
 namespace torrent {
 
@@ -103,11 +103,11 @@ DownloadMain::DownloadMain() :
   m_tracker_list = new TrackerList();
   m_tracker_controller = new TrackerController(m_tracker_list);
 
-  m_tracker_list->slot_success() = std::bind(&TrackerController::receive_success, m_tracker_controller, std::placeholders::_1, std::placeholders::_2);
-  m_tracker_list->slot_failure() = std::bind(&TrackerController::receive_failure, m_tracker_controller, std::placeholders::_1, std::placeholders::_2);
-  m_tracker_list->slot_scrape_success() = std::bind(&TrackerController::receive_scrape, m_tracker_controller, std::placeholders::_1);
-  m_tracker_list->slot_tracker_enabled()  = std::bind(&TrackerController::receive_tracker_enabled, m_tracker_controller, std::placeholders::_1);
-  m_tracker_list->slot_tracker_disabled() = std::bind(&TrackerController::receive_tracker_disabled, m_tracker_controller, std::placeholders::_1);
+  m_tracker_list->slot_success() = tr1::bind(&TrackerController::receive_success, m_tracker_controller, tr1::placeholders::_1, tr1::placeholders::_2);
+  m_tracker_list->slot_failure() = tr1::bind(&TrackerController::receive_failure, m_tracker_controller, tr1::placeholders::_1, tr1::placeholders::_2);
+  m_tracker_list->slot_scrape_success() = tr1::bind(&TrackerController::receive_scrape, m_tracker_controller, tr1::placeholders::_1);
+  m_tracker_list->slot_tracker_enabled()  = tr1::bind(&TrackerController::receive_tracker_enabled, m_tracker_controller, tr1::placeholders::_1);
+  m_tracker_list->slot_tracker_disabled() = tr1::bind(&TrackerController::receive_tracker_disabled, m_tracker_controller, tr1::placeholders::_1);
 
   m_connectionList = new ConnectionList(this);
 
@@ -119,11 +119,12 @@ DownloadMain::DownloadMain() :
   m_delegator.transfer_list()->slot_completed(std::bind1st(std::mem_fun(&DownloadMain::receive_chunk_done), this));
   m_delegator.transfer_list()->slot_corrupt(std::bind1st(std::mem_fun(&DownloadMain::receive_corrupt_chunk), this));
 
-  m_delayDisconnectPeers.set_slot(rak::mem_fn(m_connectionList, &ConnectionList::disconnect_queued));
-  m_taskTrackerRequest.set_slot(rak::mem_fn(this, &DownloadMain::receive_tracker_request));
+  m_delayDisconnectPeers.slot() = std::tr1::bind(&ConnectionList::disconnect_queued, m_connectionList);
+  m_taskTrackerRequest.slot() = std::tr1::bind(&DownloadMain::receive_tracker_request, this);
 
-  m_chunkList->slot_create_chunk(rak::make_mem_fun(file_list(), &FileList::create_chunk_index));
-  m_chunkList->slot_free_diskspace(rak::make_mem_fun(file_list(), &FileList::free_diskspace));
+  m_chunkList->set_data(file_list()->mutable_data());
+  m_chunkList->slot_create_chunk() = tr1::bind(&FileList::create_chunk_index, file_list(), tr1::placeholders::_1, tr1::placeholders::_2);
+  m_chunkList->slot_free_diskspace() = tr1::bind(&FileList::free_diskspace, file_list());
 }
 
 DownloadMain::~DownloadMain() {

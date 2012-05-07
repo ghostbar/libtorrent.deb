@@ -40,6 +40,7 @@
 #include <string>
 #include <tr1/functional>
 #include <torrent/common.h>
+#include <torrent/tracker.h>
 
 // Refactor:
 namespace rak { class priority_item; }
@@ -71,6 +72,11 @@ public:
 
   static const int mask_send = flag_send_update | flag_send_start | flag_send_stop | flag_send_completed;
 
+  static const int enable_dont_reset_stats = 0x1;
+
+  static const int close_disown_stop       = 0x1 << Tracker::EVENT_STOPPED;
+  static const int close_disown_completed  = 0x1 << Tracker::EVENT_COMPLETED;
+
   TrackerController(TrackerList* trackers);
   ~TrackerController();
 
@@ -98,9 +104,9 @@ public:
   void                send_completed_event();
   void                send_update_event();
 
-  void                close();
+  void                close(int flags = close_disown_stop | close_disown_completed);
 
-  void                enable();
+  void                enable(int enable_flags = 0);
   void                disable();
 
   void                start_requesting();

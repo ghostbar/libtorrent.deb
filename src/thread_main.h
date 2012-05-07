@@ -34,12 +34,25 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#include "config.h"
+#ifndef LIBTORRENT_THREAD_MAIN_H
+#define LIBTORRENT_THREAD_MAIN_H
 
-#include "thread_base.h"
+#include "data/hash_check_queue.h"
+#include "torrent/utils/thread_base.h"
 
 namespace torrent {
 
-ThreadBase::global_lock_type lt_cacheline_aligned ThreadBase::m_global = { 0, 0, PTHREAD_MUTEX_INITIALIZER };
+class thread_main : public thread_base {
+public:
+  const char*         name() const { return "main"; }
+
+  virtual void        init_thread();
+
+protected:
+  virtual void        call_events();
+  virtual int64_t     next_timeout_usec();
+};
 
 }
+
+#endif

@@ -80,8 +80,11 @@ public:
   bool                is_extra_tracker() const  { return (m_flags & flag_extra_tracker); }
   bool                is_in_use() const         { return is_enabled() && m_success_counter != 0; }
 
+  bool                can_scrape() const        { return (m_flags & flag_can_scrape); }
+
   virtual bool        is_busy() const = 0;
-  virtual bool        is_usable() const { return is_enabled(); }
+  bool                is_busy_not_scrape() const { return m_latest_event != EVENT_SCRAPE && is_busy(); }
+  virtual bool        is_usable() const          { return is_enabled(); }
 
   bool                can_request_state() const;
 
@@ -106,15 +109,16 @@ public:
   uint32_t            latest_new_peers() const              { return m_latest_new_peers; }
   uint32_t            latest_sum_peers() const              { return m_latest_sum_peers; }
 
+  uint32_t            success_time_next() const;
   uint32_t            success_time_last() const             { return m_success_time_last; }
   uint32_t            success_counter() const               { return m_success_counter; }
 
+  uint32_t            failed_time_next() const;
   uint32_t            failed_time_last() const              { return m_failed_time_last; }
   uint32_t            failed_counter() const                { return m_failed_counter; }
 
   uint32_t            activity_time_last() const            { return failed_counter() ? m_failed_time_last : m_success_time_last; }
-  uint32_t            success_time_next() const;
-  uint32_t            failed_time_next() const;
+  uint32_t            activity_time_next() const            { return failed_counter() ? failed_time_next() : success_time_next(); }
 
   uint32_t            scrape_time_last() const              { return m_scrape_time_last; }
   uint32_t            scrape_counter() const                { return m_scrape_counter; }
@@ -135,6 +139,10 @@ protected:
   virtual void        send_state(int state) = 0;
   virtual void        send_scrape();
   virtual void        close() = 0;
+  virtual void        disown() = 0;
+
+  // Safeguard to catch bugs that lead to hammering of trackers.
+  void                inc_request_counter();
 
   void                clear_stats();
 
@@ -170,6 +178,11 @@ protected:
   uint32_t            m_scrape_complete;
   uint32_t            m_scrape_incomplete;
   uint32_t            m_scrape_downloaded;
+
+  // Timing of the last request, and a counter for how many requests
+  // there's been in the recent past.
+  uint32_t            m_request_time_last;
+  uint32_t            m_request_counter;
 };
 
 inline bool

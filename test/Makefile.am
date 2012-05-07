@@ -7,22 +7,29 @@ LibTorrentTest_LDADD = \
 	../src/torrent/data/libsub_torrentdata.la \
 	../src/torrent/download/libsub_torrentdownload.la \
 	../src/torrent/peer/libsub_torrentpeer.la \
-	../src/torrent/utils/libsub_torrentutils.la \
 	../src/data/libsub_data.la \
 	../src/dht/libsub_dht.la \
 	../src/download/libsub_download.la \
 	../src/net/libsub_net.la \
 	../src/protocol/libsub_protocol.la \
 	../src/tracker/libsub_tracker.la \
-	../src/utils/libsub_utils.la
+	../src/utils/libsub_utils.la \
+	../src/torrent/utils/libsub_torrentutils.la
 
 LibTorrentTest_SOURCES = \
+	../src/thread_disk.cc \
+	../src/thread_disk.h \
+	\
 	rak/allocators_test.cc \
 	rak/allocators_test.h \
 	rak/ranges_test.cc \
 	rak/ranges_test.h \
-	torrent/extents_test.cc \
-	torrent/extents_test.h \
+	data/chunk_list_test.cc \
+	data/chunk_list_test.h \
+	data/hash_check_queue_test.cc \
+	data/hash_check_queue_test.h \
+	data/hash_queue_test.cc \
+	data/hash_queue_test.h \
 	torrent/http_test.cc \
 	torrent/http_test.h \
 	torrent/object_test.cc \
@@ -35,14 +42,26 @@ LibTorrentTest_SOURCES = \
 	torrent/object_stream_test.h \
 	torrent/tracker_controller_test.cc \
 	torrent/tracker_controller_test.h \
+	torrent/tracker_controller_features.cc \
+	torrent/tracker_controller_features.h \
 	torrent/tracker_list_test.cc \
 	torrent/tracker_list_test.h \
+	torrent/tracker_list_features_test.cc \
+	torrent/tracker_list_features_test.h \
 	torrent/tracker_timeout_test.cc \
 	torrent/tracker_timeout_test.h \
+	torrent/utils/extents_test.cc \
+	torrent/utils/extents_test.h \
 	torrent/utils/log_test.cc \
 	torrent/utils/log_test.h \
+	torrent/utils/log_buffer_test.cc \
+	torrent/utils/log_buffer_test.h \
 	torrent/utils/option_strings_test.cc \
 	torrent/utils/option_strings_test.h \
+	torrent/utils/signal_bitfield_test.cc \
+	torrent/utils/signal_bitfield_test.h \
+	torrent/utils/thread_base_test.cc \
+	torrent/utils/thread_base_test.h \
 	tracker/tracker_http_test.cc \
 	tracker/tracker_http_test.h \
 	main.cc
