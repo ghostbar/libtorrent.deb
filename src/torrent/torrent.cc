@@ -37,7 +37,6 @@
 #include "config.h"
 
 #include <rak/address_info.h>
-#include <rak/functional.h>
 #include <rak/string_manip.h>
 
 #include "exceptions.h"
@@ -92,22 +91,22 @@ calculate_reserved(uint32_t openMax) {
 }    
 
 void
-initialize(Poll* poll) {
+initialize() {
   if (manager != NULL)
     throw internal_error("torrent::initialize(...) called but the library has already been initialized");
-
-  if (poll->open_max() < 64)
-    throw internal_error("Could not initialize libtorrent, Poll::open_max() < 64.");
 
   cachedTime = rak::timer::current();
 
   manager = new Manager;
-  manager->set_poll(poll);
+  manager->main_thread_main()->init_thread();
 
-  uint32_t maxFiles = calculate_max_open_files(poll->open_max());
+  uint32_t maxFiles = calculate_max_open_files(manager->poll()->open_max());
 
-  manager->connection_manager()->set_max_size(poll->open_max() - maxFiles - calculate_reserved(poll->open_max()));
+  manager->connection_manager()->set_max_size(manager->poll()->open_max() - maxFiles - calculate_reserved(manager->poll()->open_max()));
   manager->file_manager()->set_max_open_files(maxFiles);
+
+  manager->main_thread_disk()->init_thread();
+  manager->main_thread_disk()->start_thread();
 }
 
 // Clean up and close stuff. Stopping all torrents and waiting for
@@ -117,30 +116,10 @@ cleanup() {
   if (manager == NULL)
     throw internal_error("torrent::cleanup() called but the library is not initialized.");
 
+  manager->main_thread_disk()->stop_thread_wait();
+
   delete manager;
   manager = NULL;
-}
-
-void
-perform() {
-  cachedTime = rak::timer::current();
-
-  // Ensure we don't call rak::timer::current() twice if there was no
-  // scheduled tasks called.
-  if (taskScheduler.empty() || taskScheduler.top()->time() > cachedTime)
-    return;
-
-  while (!taskScheduler.empty() && taskScheduler.top()->time() <= cachedTime) {
-    rak::priority_item* v = taskScheduler.top();
-    taskScheduler.pop();
-
-    v->clear_time();
-    v->call();
-  }
-
-  // Update the timer again to ensure we get accurate triggering of
-  // msec timers.
-  cachedTime = rak::timer::current();
 }
 
 bool
@@ -148,6 +127,11 @@ is_inactive() {
   return manager == NULL ||
     std::find_if(manager->download_manager()->begin(), manager->download_manager()->end(), std::not1(std::mem_fun(&DownloadWrapper::is_stopped)))
     == manager->download_manager()->end();
+}
+
+thread_base*
+main_thread() {
+  return manager->main_thread_main();
 }
 
 ChunkManager*      chunk_manager() { return manager->chunk_manager(); }
@@ -162,16 +146,6 @@ total_handshakes() {
   return manager->handshake_manager()->size();
 }
 
-int64_t
-next_timeout() {
-  cachedTime = rak::timer::current();
-
-  if (!taskScheduler.empty())
-    return std::max(taskScheduler.top()->time() - cachedTime, rak::timer()).usec();
-  else
-    return rak::timer::from_seconds(60).usec();
-}
-
 Throttle* down_throttle_global() { return manager->download_throttle(); }
 Throttle* up_throttle_global() { return manager->upload_throttle(); }
 
@@ -180,41 +154,6 @@ const Rate* up_rate() { return manager->upload_throttle()->rate(); }
 const char* version() { return VERSION; }
 
 uint32_t hash_queue_size() { return manager->hash_queue()->size(); }
-uint32_t hash_read_ahead() { return manager->hash_queue()->read_ahead(); }
-
-void
-set_hash_read_ahead(uint32_t bytes) {
-  if (bytes < (1 << 20) || bytes > (64 << 20))
-    throw input_error("Hash read ahead must be between 1 and 64 MB.");
-
-  manager->hash_queue()->set_read_ahead(bytes);
-}
-
-uint32_t
-hash_interval() {
-  return manager->hash_queue()->interval();
-}
-
-void
-set_hash_interval(uint32_t usec) {
-  if (usec < (1 * 1000) || usec > (1000 * 1000))
-    throw input_error("Hash interval must be between 1 and 1000 ms.");
-
-  manager->hash_queue()->set_interval(usec);
-}
-
-uint32_t
-hash_max_tries() {
-  return manager->hash_queue()->max_tries();
-}
-
-void
-set_hash_max_tries(uint32_t tries) {
-  if (tries > 100)
-    throw input_error("Hash max tries must be between 0 and 100.");
-
-  manager->hash_queue()->set_max_tries(tries);
-}  
 
 EncodingList*
 encoding_list() {

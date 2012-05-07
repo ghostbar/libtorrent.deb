@@ -5,8 +5,8 @@
 #include "torrent/object_static_map.h"
 #include "protocol/extensions.h"
 
-#import "object_test_utils.h"
-#import "object_static_map_test.h"
+#include "object_test_utils.h"
+#include "object_static_map_test.h"
 
 CPPUNIT_TEST_SUITE_REGISTRATION(ObjectStaticMapTest);
 
@@ -154,9 +154,9 @@ ObjectStaticMapTest::test_read() {
 
 enum ext_test_keys {
   key_e,
-  key_m_utMetadata,
+  // key_m_utMetadata,
   key_m_utPex,
-  key_metadataSize,
+  // key_metadataSize,
   key_p,
   key_reqq,
   key_v,

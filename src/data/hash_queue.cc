@@ -36,16 +36,28 @@
 
 #include "config.h"
 
+#define __STDC_FORMAT_MACROS
+
 #include <functional>
+#include <rak/functional.h>
+#include <unistd.h>
 
 #include "torrent/exceptions.h"
-#include "torrent/thread_base.h"
+#include "torrent/data/download_data.h"
+#include "torrent/utils/log.h"
+#include "torrent/utils/thread_base.h"
 
 #include "hash_queue.h"
 #include "hash_chunk.h"
 #include "chunk.h"
 #include "chunk_list_node.h"
 #include "globals.h"
+#include "thread_disk.h"
+
+#define LT_LOG_DATA(data, log_level, log_fmt, ...)                       \
+  lt_log_print_data(LOG_STORAGE_##log_level, data, "hash_queue", log_fmt, __VA_ARGS__);
+
+namespace tr1 { using namespace std::tr1; }
 
 namespace torrent {
 
@@ -71,52 +83,29 @@ struct HashQueueWillneed {
 // disk usage. But this may cause too much blocking as it will think
 // everything is in memory, thus we need to throttle.
 
-HashQueue::HashQueue() :
-  m_readAhead(10 << 20),
-  m_interval(2000),
-  m_maxTries(5) {
+HashQueue::HashQueue(thread_disk* thread) :
+  m_thread_disk(thread) {
 
-  m_taskWork.set_slot(rak::mem_fn(this, &HashQueue::work));
+  pthread_mutex_init(&m_done_chunks_lock, NULL);
+  m_thread_disk->hash_queue()->slot_chunk_done() = tr1::bind(&HashQueue::chunk_done, this, tr1::placeholders::_1, tr1::placeholders::_2);
 }
 
-
-inline void
-HashQueue::willneed(int bytes) {
-  std::find_if(begin(), end(), HashQueueWillneed(bytes));
-}
 
 // If we're done immediately, move the chunk to the front of the list so
 // the next work cycle gets stuff done.
 void
-HashQueue::push_back(ChunkHandle handle, slot_done_type d) {
-  if (!handle.is_valid())
+HashQueue::push_back(ChunkHandle handle, HashQueueNode::id_type id, slot_done_type d) {
+  LT_LOG_DATA(id, DEBUG, "Adding index:%" PRIu32 " to queue.", handle.index());
+
+  if (!handle.is_loaded())
     throw internal_error("HashQueue::add(...) received an invalid chunk");
 
-  HashChunk* hc = new HashChunk(handle);
+  HashChunk* hash_chunk = new HashChunk(handle);
 
-  if (empty()) {
-    if (m_taskWork.is_queued())
-      throw internal_error("Empty HashQueue is still in task schedule");
+  base_type::push_back(HashQueueNode(id, hash_chunk, d));
 
-    m_tries = 0;
-    priority_queue_insert(&taskScheduler, &m_taskWork, cachedTime + 1);
-  }
-
-  base_type::push_back(HashQueueNode(hc, d));
-
-  // Try to hash as much as possible immediately if incore, so that a
-  // newly downloaded chunk doesn't get swapped out when downloading
-  // at high speeds / low memory.
-  base_type::back().perform_remaining(false);
-
-  // Properly adjust this so it doesn't willneed on already hashed
-  // memory regions.
-  //
-  // Since we're already doing willneed in the hash checker, don't do
-  // willneed here as both the initial hash check and newly downloaded
-  // chunks use push_back(...).
-  //
-  // willneed(m_readAhead);
+  m_thread_disk->hash_queue()->push_back(hash_chunk);
+  m_thread_disk->interrupt();
 }
 
 bool
@@ -134,14 +123,35 @@ HashQueue::remove(HashQueueNode::id_type id) {
   iterator itr = begin();
   
   while ((itr = std::find_if(itr, end(), rak::equal(id, std::mem_fun_ref(&HashQueueNode::id)))) != end()) {
-    itr->slot_done()(*itr->get_chunk()->chunk(), NULL);
+    HashChunk *hash_chunk = itr->get_chunk();
 
+    LT_LOG_DATA(id, DEBUG, "Removing index:%" PRIu32 " from queue.", hash_chunk->handle().index());
+
+    thread_base::release_global_lock();
+    bool result = m_thread_disk->hash_queue()->remove(hash_chunk);
+    thread_base::acquire_global_lock();
+
+    // The hash chunk was not found, so we need to wait until the hash
+    // check finishes.
+    if (!result) {
+      pthread_mutex_lock(&m_done_chunks_lock);
+      done_chunks_type::iterator done_itr;
+
+      while ((done_itr = m_done_chunks.find(hash_chunk)) == m_done_chunks.end()) {
+        pthread_mutex_unlock(&m_done_chunks_lock);
+        usleep(100);
+        pthread_mutex_lock(&m_done_chunks_lock);
+      }
+
+      m_done_chunks.erase(done_itr);
+      pthread_mutex_unlock(&m_done_chunks_lock);
+    }
+
+    itr->slot_done()(*hash_chunk->chunk(), NULL);
     itr->clear();
+
     itr = erase(itr);
   }
-
-  if (empty())
-    priority_queue_erase(&taskScheduler, &m_taskWork);
 }
 
 void
@@ -152,59 +162,50 @@ HashQueue::clear() {
   // Replace with a dtor check to ensure it is empty?
 //   std::for_each(begin(), end(), std::mem_fun_ref(&HashQueueNode::clear));
 //   base_type::clear();
-//   priority_queue_erase(&taskScheduler, &m_taskWork);
 }
 
 void
 HashQueue::work() {
-  while (!empty()) {
-    if (!check(++m_tries >= m_maxTries))
-      return priority_queue_insert(&taskScheduler, &m_taskWork, cachedTime + m_interval);
+  pthread_mutex_lock(&m_done_chunks_lock);
     
-    m_tries = std::max(0, (int)(m_tries - 2));
+  while (!m_done_chunks.empty()) {
+    HashChunk* hash_chunk = m_done_chunks.begin()->first;
+    HashString hash_value = m_done_chunks.begin()->second;
+    m_done_chunks.erase(m_done_chunks.begin());
 
-    // If we got any XMLRPC calls to handle we need to break
-    // here.
-    if (ThreadBase::global_queue_size() != 0)
-      break;
+    // TODO: This is not optimal as we jump around... Check for front
+    // of HashQueue in done_chunks instead.
+
+    iterator itr = std::find_if(begin(), end(), tr1::bind(std::equal_to<HashChunk*>(),
+                                                          hash_chunk,
+                                                          tr1::bind(&HashQueueNode::get_chunk, tr1::placeholders::_1)));
+
+    // TODO: Fix this...
+    if (itr == end())
+      throw internal_error("Could not find done chunk's node.");
+
+    LT_LOG_DATA(itr->id(), DEBUG, "Passing index:%" PRIu32 " to owner: %s.",
+                hash_chunk->handle().index(),
+                hash_string_to_hex_str(hash_value).c_str());
+
+    HashQueueNode::slot_done_type slotDone = itr->slot_done();
+    base_type::erase(itr);
+
+    slotDone(hash_chunk->handle(), hash_value.c_str());
+    delete hash_chunk;
   }
 
-  if (!empty() && !m_taskWork.is_queued())
-    priority_queue_insert(&taskScheduler, &m_taskWork, cachedTime + 1);
+  pthread_mutex_unlock(&m_done_chunks_lock);
 }
 
-bool
-HashQueue::check(bool force) {
-  // Force hash check when the queue is more than 100 chunks, as that
-  // is indicative of the hash queue falling behind on hashing
-  // downloaded chunks.
-  force = force || size() > 50;
+void
+HashQueue::chunk_done(HashChunk* hash_chunk, const HashString& hash_value) {
+  pthread_mutex_lock(&m_done_chunks_lock);
 
-  // TODO: The read-ahead algorithm here calls msync will-need, yet we
-  // are only trying to hash the first chunk. Fix this so that only
-  // whole chunks are called with will-need and that we check mincore
-  // for all those chunks in case we can hash them.
-  if (base_type::front().get_chunk()->remaining() != 0 && !base_type::front().perform_remaining(force)) {
-    willneed(m_readAhead);
-    return false;
-  }
+  m_done_chunks[hash_chunk] = hash_value;
+  m_slot_has_work(m_done_chunks.empty());
 
-  HashChunk* chunk                       = base_type::front().get_chunk();
-  HashQueueNode::slot_done_type slotDone = base_type::front().slot_done();
-
-  base_type::pop_front();
-
-  char buffer[20];
-  chunk->hash_c(buffer);
-
-  slotDone(*chunk->chunk(), buffer);
-  delete chunk;
-
-  // This should be a few chunks ahead.
-  if (!empty())
-    willneed(m_readAhead);
-
-  return true;
+  pthread_mutex_unlock(&m_done_chunks_lock);
 }
 
 }

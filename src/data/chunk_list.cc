@@ -36,13 +36,23 @@
 
 #include "config.h"
 
+#define __STDC_FORMAT_MACROS
+
+#include <rak/error_number.h>
+#include <rak/functional.h>
+
 #include "torrent/exceptions.h"
 #include "torrent/chunk_manager.h"
+#include "torrent/data/download_data.h"
+#include "torrent/utils/log.h"
 #include "torrent/utils/log_files.h"
 
 #include "chunk_list.h"
 #include "chunk.h"
 #include "globals.h"
+
+#define LT_LOG_THIS(log_level, log_fmt, ...)                              \
+  lt_log_print_data(LOG_STORAGE_##log_level, m_data, "chunk_list", log_fmt, __VA_ARGS__);
 
 namespace torrent {
 
@@ -74,11 +84,13 @@ ChunkList::has_chunk(size_type index, int prot) const {
 }
 
 void
-ChunkList::resize(size_type s) {
+ChunkList::resize(size_type to_size) {
+  LT_LOG_THIS(INFO, "Resizing: from:%" PRIu32 " to:%" PRIu32 ".", size(), to_size);
+  
   if (!empty())
     throw internal_error("ChunkList::resize(...) called on an non-empty object.");
 
-  base_type::resize(s);
+  base_type::resize(to_size);
 
   uint32_t index = 0;
 
@@ -88,6 +100,8 @@ ChunkList::resize(size_type s) {
 
 void
 ChunkList::clear() {
+  LT_LOG_THIS(INFO, "Clearing.", 0);
+
   // Don't do any sync'ing as whomever decided to shut down really
   // doesn't care, so just de-reference all chunks in queue.
   for (Queue::iterator itr = m_queue.begin(), last = m_queue.end(); itr != last; ++itr) {
@@ -100,16 +114,25 @@ ChunkList::clear() {
 
   m_queue.clear();
 
-  if (std::find_if(begin(), end(), std::mem_fun_ref(&ChunkListNode::chunk)) != end() ||
-      std::find_if(begin(), end(), std::mem_fun_ref(&ChunkListNode::references)) != end() ||
-      std::find_if(begin(), end(), std::mem_fun_ref(&ChunkListNode::writable)) != end())
-    throw internal_error("ChunkList::clear() called but a valid node was found.");
+  if (std::find_if(begin(), end(), std::mem_fun_ref(&ChunkListNode::chunk)) != end())
+    throw internal_error("ChunkList::clear() called but a node with a valid chunk was found.");
+
+  if (std::find_if(begin(), end(), std::mem_fun_ref(&ChunkListNode::references)) != end())
+    throw internal_error("ChunkList::clear() called but a node with references != 0 was found.");
+
+  if (std::find_if(begin(), end(), std::mem_fun_ref(&ChunkListNode::writable)) != end())
+    throw internal_error("ChunkList::clear() called but a node with writable != 0 was found.");
+
+  if (std::find_if(begin(), end(), std::mem_fun_ref(&ChunkListNode::blocking)) != end())
+    throw internal_error("ChunkList::clear() called but a node with blocking != 0 was found.");
 
   base_type::clear();
 }
 
 ChunkHandle
 ChunkList::get(size_type index, int flags) {
+  LT_LOG_THIS(DEBUG, "Get: index:%" PRIu32 " flags:%#x.", index, flags);
+
   rak::error_number::clear_global();
 
   ChunkListNode* node = &base_type::at(index);
@@ -118,21 +141,36 @@ ChunkList::get(size_type index, int flags) {
   int prot_flags = MemoryChunk::prot_read | ((flags & get_writable) ? MemoryChunk::prot_write : 0);
 
   if (!node->is_valid()) {
-    if (!m_manager->allocate(m_chunk_size, allocate_flags))
+    if (!m_manager->allocate(m_chunk_size, allocate_flags)) {
+      LT_LOG_THIS(DEBUG, "Could not allocate: memory:%" PRIu64 " block:%" PRIu32 ".",
+                  m_manager->memory_usage(), m_manager->memory_block_count());
       return ChunkHandle::from_error(rak::error_number::e_nomem);
+    }
 
-    Chunk* chunk = m_slotCreateChunk(index, prot_flags);
+    Chunk* chunk = m_slot_create_chunk(index, prot_flags);
 
     if (chunk == NULL) {
+      rak::error_number current_error = rak::error_number::current();
+
+      LT_LOG_THIS(DEBUG, "Could not create: memory:%" PRIu64 " block:%" PRIu32 " errno:%i errmsg:%s.",
+                  m_manager->memory_usage(), m_manager->memory_block_count(),
+                  current_error.value(), current_error.c_str());
       m_manager->deallocate(m_chunk_size, allocate_flags | ChunkManager::allocate_revert_log);
-      return ChunkHandle::from_error(rak::error_number::current().is_valid() ? rak::error_number::current() : rak::error_number::e_noent);
+      return ChunkHandle::from_error(current_error.is_valid() ? current_error : rak::error_number::e_noent);
     }
 
     node->set_chunk(chunk);
     node->set_time_modified(rak::timer());
 
   } else if (flags & get_writable && !node->chunk()->is_writable()) {
-    Chunk* chunk = m_slotCreateChunk(index, prot_flags);
+    if (node->blocking() != 0) {
+      if ((flags & get_nonblock))
+        return ChunkHandle::from_error(rak::error_number::e_again);
+
+      throw internal_error("No support yet for getting write permission for blocked chunk.");
+    }
+
+    Chunk* chunk = m_slot_create_chunk(index, prot_flags);
 
     if (chunk == NULL)
       return ChunkHandle::from_error(rak::error_number::current().is_valid() ? rak::error_number::current() : rak::error_number::e_noent);
@@ -153,7 +191,11 @@ ChunkList::get(size_type index, int flags) {
     node->set_sync_triggered(false);
   }
 
-  return ChunkHandle(node, flags & get_writable);
+  if (flags & get_blocking) {
+    node->inc_blocking();
+  }
+
+  return ChunkHandle(node, flags & get_writable, flags & get_blocking);
 }
 
 // The chunks in 'm_queue' have been modified and need to be synced
@@ -161,15 +203,23 @@ ChunkList::get(size_type index, int flags) {
 // will allow us to schedule writes at more resonable intervals.
 
 void
-ChunkList::release(ChunkHandle* handle, int flags) {
+ChunkList::release(ChunkHandle* handle, int release_flags) {
   if (!handle->is_valid())
     throw internal_error("ChunkList::release(...) received an invalid handle.");
 
   if (handle->object() < &*begin() || handle->object() >= &*end())
     throw internal_error("ChunkList::release(...) received an unknown handle.");
 
-  if (handle->object()->references() <= 0 || (handle->is_writable() && handle->object()->writable() <= 0))
+  LT_LOG_THIS(DEBUG, "Release: index:%" PRIu32 " flags:%#x.", handle->index(), release_flags);
+ 
+  if (handle->object()->references() <= 0 ||
+      (handle->is_writable() && handle->object()->writable() <= 0) ||
+      (handle->is_blocking() && handle->object()->blocking() <= 0))
     throw internal_error("ChunkList::release(...) received a node with bad reference count.");
+
+  if (handle->is_blocking()) {
+    handle->object()->dec_blocking();
+  }
 
   if (handle->is_writable()) {
 
@@ -192,7 +242,7 @@ ChunkList::release(ChunkHandle* handle, int flags) {
       if (is_queued(handle->object()))
         throw internal_error("ChunkList::release(...) tried to unmap a queued chunk.");
 
-      clear_chunk(handle->object(), flags);
+      clear_chunk(handle->object(), release_flags);
     }
   }
 
@@ -236,6 +286,8 @@ ChunkList::sync_chunk(ChunkListNode* node, std::pair<int,bool> options) {
 
 uint32_t
 ChunkList::sync_chunks(int flags) {
+  LT_LOG_THIS(DEBUG, "Sync chunks: flags:%#x.", flags);
+
   Queue::iterator split;
 
   if (flags & sync_all)
@@ -254,7 +306,7 @@ ChunkList::sync_chunks(int flags) {
   // If we got enough diskspace and have not requested safe syncing,
   // then sync all chunks with MS_ASYNC.
   if (!(flags & (sync_safe | sync_sloppy))) {
-    if (m_manager->safe_sync() || m_slotFreeDiskspace() <= m_manager->safe_free_diskspace())
+    if (m_manager->safe_sync() || m_slot_free_diskspace() <= m_manager->safe_free_diskspace())
       flags |= sync_safe;
     else
       flags |= sync_force;
@@ -302,7 +354,7 @@ ChunkList::sync_chunks(int flags) {
   // The caller must either make sure that it is safe to close the
   // download or set the sync_ignore_error flag.
   if (failed && !(flags & sync_ignore_error))
-    m_slotStorageError("Could not sync chunk: " + std::string(rak::error_number::current().c_str()));
+    m_slot_storage_error("Could not sync chunk: " + std::string(rak::error_number::current().c_str()));
 
   return failed;
 }

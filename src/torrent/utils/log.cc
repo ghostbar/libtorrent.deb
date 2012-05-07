@@ -37,11 +37,14 @@
 #include "config.h"
 
 #include "log.h"
+#include "log_buffer.h"
+
 #include "globals.h"
 #include "rak/algorithm.h"
 #include "rak/timer.h"
 #include "torrent/exceptions.h"
 #include "torrent/download_info.h"
+#include "torrent/data/download_data.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,7 +57,7 @@
 #include <tr1/functional>
 #include <tr1/memory>
 
-namespace std { using namespace tr1; }
+namespace tr1 { using namespace std::tr1; }
 
 namespace torrent {
 
@@ -78,6 +81,8 @@ log_output_list log_outputs;
 log_child_list  log_children;
 log_cache_list  log_cache;
 log_group_list  log_groups;
+
+pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Removing logs always triggers a check if we got any un-used
 // log_output objects.
@@ -119,8 +124,6 @@ log_rebuild_cache() {
   std::for_each(log_cache.begin(), log_cache.end(), std::mem_fun_ref(&log_cache_entry::clear));
   log_cache.clear();
 
-  //for (log_group_list::iterator itr = log_groups.begin(), last = log_groups.end(); itr != last; itr++) {
-
   for (int idx = 0, last = log_groups.size(); idx != last; idx++) {
     uint64_t use_outputs = log_groups[idx].cached_outputs();
 
@@ -131,7 +134,7 @@ log_rebuild_cache() {
 
     log_cache_list::iterator cache_itr = 
       std::find_if(log_cache.begin(), log_cache.end(),
-                   std::bind(&log_cache_entry::equal_outputs, std::placeholders::_1, use_outputs));
+                   tr1::bind(&log_cache_entry::equal_outputs, tr1::placeholders::_1, use_outputs));
     
     if (cache_itr == log_cache.end()) {
       cache_itr = log_cache.insert(log_cache.end(), log_cache_entry());
@@ -151,38 +154,35 @@ log_rebuild_cache() {
 }
 
 void
-log_group::internal_print(const char* fmt, ...) {
+log_group::internal_print(const HashString* hash, const char* subsystem, const void* dump_data, size_t dump_size, const char* fmt, ...) {
   va_list ap;
   unsigned int buffer_size = 4096;
   char buffer[buffer_size];
+  char* first = buffer;
+
+  if (hash != NULL && subsystem != NULL) {
+    first = hash_string_to_hex(*hash, first);
+    first += snprintf(first, 4096 - (first - buffer), "->%s: ", subsystem);
+  }
 
   va_start(ap, fmt);
-  int count = vsnprintf(buffer, 4096, fmt, ap);
+  int count = vsnprintf(first, 4096 - (first - buffer), fmt, ap);
+  first += std::min<unsigned int>(count, buffer_size - 1);
   va_end(ap);
 
-  if (count >= 0)
-    std::for_each(m_first, m_last, std::bind(&log_slot::operator(),
-                                             std::placeholders::_1, buffer,
-                                             std::min<unsigned int>(count, buffer_size - 1),
-                                             std::distance(log_groups.begin(), this)));
-}
+  if (count <= 0)
+    return;
 
-void
-log_group::internal_print_info(const DownloadInfo* info, const char* fmt, ...) {
-  va_list ap;
-  unsigned int buffer_size = 4096;
-  char buffer[buffer_size];
-  char* first = hash_string_to_hex(info->hash(), buffer);
-
-  va_start(ap, fmt);
-  int count = vsnprintf(first, 4096 - (first - buffer) , fmt, ap);
-  va_end(ap);
-
-  if (count >= 0)
-    std::for_each(m_first, m_last, std::bind(&log_slot::operator(),
-                                             std::placeholders::_1, buffer,
-                                             std::min<unsigned int>(count, buffer_size - 1),
-                                             std::distance(log_groups.begin(), this)));
+  pthread_mutex_lock(&log_mutex);
+  std::for_each(m_first, m_last, tr1::bind(&log_slot::operator(),
+                                           tr1::placeholders::_1,
+                                           buffer,
+                                           std::distance(buffer, first),
+                                           std::distance(log_groups.begin(), this)));
+  if (dump_data != NULL)
+    std::for_each(m_first, m_last,
+                  tr1::bind(&log_slot::operator(), tr1::placeholders::_1, (const char*)dump_data, dump_size, -1));
+  pthread_mutex_unlock(&log_mutex);
 }
 
 #define LOG_CASCADE(parent) LOG_CHILDREN_CASCADE(parent, parent)
@@ -204,40 +204,48 @@ log_group::internal_print_info(const DownloadInfo* info, const char* fmt, ...) {
 
 void
 log_initialize() {
+  pthread_mutex_lock(&log_mutex);
+
   LOG_CASCADE(LOG_CRITICAL);
+
   LOG_CASCADE(LOG_CONNECTION_CRITICAL);
   LOG_CASCADE(LOG_DHT_CRITICAL);
   LOG_CASCADE(LOG_PEER_CRITICAL);
   LOG_CASCADE(LOG_RPC_CRITICAL);
+  LOG_CASCADE(LOG_SOCKET_CRITICAL);
   LOG_CASCADE(LOG_STORAGE_CRITICAL);
   LOG_CASCADE(LOG_THREAD_CRITICAL);
   LOG_CASCADE(LOG_TRACKER_CRITICAL);
   LOG_CASCADE(LOG_TORRENT_CRITICAL);
 
-  LOG_CHILDREN_SUBGROUP(LOG_CRITICAL, LOG_CONNECTION_CRITICAL);
-  LOG_CHILDREN_SUBGROUP(LOG_CRITICAL, LOG_DHT_CRITICAL);
-  LOG_CHILDREN_SUBGROUP(LOG_CRITICAL, LOG_RPC_CRITICAL);
-  LOG_CHILDREN_SUBGROUP(LOG_CRITICAL, LOG_STORAGE_CRITICAL);
-  LOG_CHILDREN_SUBGROUP(LOG_CRITICAL, LOG_THREAD_CRITICAL);
-  LOG_CHILDREN_SUBGROUP(LOG_CRITICAL, LOG_TORRENT_CRITICAL);
-
-  // Some groups are too verbose, and as such the parent is matched
-  // against the log output level one above.
+  LOG_CHILDREN_CASCADE(LOG_CRITICAL, LOG_CONNECTION_CRITICAL);
+  LOG_CHILDREN_CASCADE(LOG_CRITICAL, LOG_DHT_CRITICAL);
   LOG_CHILDREN_CASCADE(LOG_CRITICAL, LOG_PEER_CRITICAL);
+  LOG_CHILDREN_CASCADE(LOG_CRITICAL, LOG_RPC_CRITICAL);
+  LOG_CHILDREN_CASCADE(LOG_CRITICAL, LOG_SOCKET_CRITICAL);
+  LOG_CHILDREN_CASCADE(LOG_CRITICAL, LOG_STORAGE_CRITICAL);
+  LOG_CHILDREN_CASCADE(LOG_CRITICAL, LOG_THREAD_CRITICAL);
   LOG_CHILDREN_CASCADE(LOG_CRITICAL, LOG_TRACKER_CRITICAL);
+  LOG_CHILDREN_CASCADE(LOG_CRITICAL, LOG_TORRENT_CRITICAL);
 
   std::sort(log_children.begin(), log_children.end());
+
   log_rebuild_cache();
+  pthread_mutex_unlock(&log_mutex);
 }
 
 void
 log_cleanup() {
+  pthread_mutex_lock(&log_mutex);
+
   log_groups.assign(log_group());
   log_outputs.clear();
   log_children.clear();
 
   std::for_each(log_cache.begin(), log_cache.end(), std::mem_fun_ref(&log_cache_entry::clear));
   log_cache.clear();
+
+  pthread_mutex_unlock(&log_mutex);
 }
 
 log_output_list::iterator
@@ -254,35 +262,21 @@ log_find_output_name(const char* name) {
 // Add limit of 64 log entities...
 void
 log_open_output(const char* name, log_slot slot) {
-  if (log_outputs.size() >= (size_t)std::numeric_limits<uint64_t>::digits)
-    throw input_error("Cannot open more than 64 log output handlers.");
+  pthread_mutex_lock(&log_mutex);
 
-  if (log_find_output_name(name) != log_outputs.end())
+  if (log_outputs.size() >= (size_t)std::numeric_limits<uint64_t>::digits) {
+    pthread_mutex_unlock(&log_mutex);
+    throw input_error("Cannot open more than 64 log output handlers.");
+  }
+  
+  if (log_find_output_name(name) != log_outputs.end()) {
+    pthread_mutex_unlock(&log_mutex);
     throw input_error("Log name already used.");
+  }
 
   log_outputs.push_back(std::make_pair(name, slot));
   log_rebuild_cache();
-}
-
-char log_level_char[] = { 'C', 'E', 'W', 'N', 'I', 'D' };
-
-void
-log_file_write(std::shared_ptr<std::ofstream>& outfile, const char* data, size_t length, int group) {
-  // Add group name, data, etc as flags.
-  *outfile << cachedTime.seconds() << ' ' << log_level_char[group % 6] << ' ' << data << std::endl;
-}
-
-// TODO: Allow for different write functions that prepend timestamps,
-// etc.
-void
-log_open_file_output(const char* name, const char* filename) {
-  std::shared_ptr<std::ofstream> outfile(new std::ofstream(filename));
-
-  if (!outfile->good())
-    throw input_error("Could not open log file '" + std::string(filename) + "'.");
-
-  //  log_open_output(name, std::bind(&std::ofstream::write, outfile, std::placeholders::_1, std::placeholders::_2));
-  log_open_output(name, std::bind(&log_file_write, outfile, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+  pthread_mutex_unlock(&log_mutex);
 }
 
 void
@@ -291,13 +285,17 @@ log_close_output(const char* name) {
 
 void
 log_add_group_output(int group, const char* name) {
+  pthread_mutex_lock(&log_mutex);
   log_output_list::iterator itr = log_find_output_name(name);
 
-  if (itr == log_outputs.end())
+  if (itr == log_outputs.end()) {
+    pthread_mutex_unlock(&log_mutex);
     throw input_error("Log name not found.");
+  }
   
   log_groups[group].set_outputs(log_groups[group].outputs() | (0x1 << std::distance(log_outputs.begin(), itr)));
   log_rebuild_cache();
+  pthread_mutex_unlock(&log_mutex);
 }
 
 void
@@ -308,17 +306,68 @@ log_remove_group_output(int group, const char* name) {
 // cache by crawling from child to parent.
 void
 log_add_child(int group, int child) {
+  pthread_mutex_lock(&log_mutex);
   if (std::find(log_children.begin(), log_children.end(), std::make_pair(group, child)) != log_children.end())
     return;
 
   log_children.push_back(std::make_pair(group, child));
   std::sort(log_children.begin(), log_children.end());
+
   log_rebuild_cache();
+  pthread_mutex_unlock(&log_mutex);
 }
 
 void
 log_remove_child(int group, int child) {
   // Remove from all groups, then modify all outputs.
+}
+
+const char log_level_char[] = { 'C', 'E', 'W', 'N', 'I', 'D' };
+
+void
+log_file_write(tr1::shared_ptr<std::ofstream>& outfile, const char* data, size_t length, int group) {
+  // Add group name, data, etc as flags.
+
+  // Normal groups are nul-terminated strings.
+  if (group >= 0) {
+    *outfile << cachedTime.seconds() << ' ' << log_level_char[group % 6] << ' ' << data << std::endl;
+  } else if (group == -1) {
+    *outfile << "---DUMP---" << std::endl;
+    if (length != 0) {
+      outfile->rdbuf()->sputn(data, length);
+      *outfile << std::endl;
+    }
+    *outfile << "---END---" << std::endl;
+  }
+}
+
+// TODO: Allow for different write functions that prepend timestamps,
+// etc.
+void
+log_open_file_output(const char* name, const char* filename) {
+  tr1::shared_ptr<std::ofstream> outfile(new std::ofstream(filename));
+
+  if (!outfile->good())
+    throw input_error("Could not open log file '" + std::string(filename) + "'.");
+
+  //  log_open_output(name, tr1::bind(&std::ofstream::write, outfile, tr1::placeholders::_1, tr1::placeholders::_2));
+  log_open_output(name, tr1::bind(&log_file_write, outfile,
+                                  tr1::placeholders::_1, tr1::placeholders::_2, tr1::placeholders::_3));
+}
+
+log_buffer*
+log_open_log_buffer(const char* name) {
+  log_buffer* buffer = new log_buffer;
+
+  try {
+    log_open_output(name, tr1::bind(&log_buffer::lock_and_push_log, buffer,
+                                    tr1::placeholders::_1, tr1::placeholders::_2, tr1::placeholders::_3));
+    return buffer;
+
+  } catch (torrent::input_error& e) {
+    delete buffer;
+    throw;
+  }
 }
 
 }

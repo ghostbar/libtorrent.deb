@@ -1,10 +1,14 @@
 #include "config.h"
 
+#define __STDC_CONSTANT_MACROS
+
+#include <iostream>
 #include <sstream>
+#include <inttypes.h>
 #include <torrent/object.h>
 
-#import "object_stream_test.h"
-#import "object_test_utils.h"
+#include "object_stream_test.h"
+#include "object_test_utils.h"
 
 CPPUNIT_TEST_SUITE_REGISTRATION(ObjectStreamTest);
 
@@ -81,7 +85,7 @@ ObjectStreamTest::testReadBencodeC() {
 
 bool object_write_bencode(const torrent::Object& obj, const char* original) {
   try {
-    char buffer[1023];
+    char buffer[1025];
     char* last = torrent::object_write_bencode(buffer, buffer + 1024, &obj).first;
     return std::strncmp(buffer, original, std::distance(buffer, last)) == 0;
 
@@ -92,7 +96,10 @@ bool object_write_bencode(const torrent::Object& obj, const char* original) {
 
 bool object_stream_read_skip(const char* input) {
   try {
-    return torrent::object_read_bencode_skip_c(input, input + strlen(input)) == input + strlen(input);
+    torrent::Object tmp;
+    return
+      torrent::object_read_bencode_c(input, input + strlen(input), &tmp) == input + strlen(input) &&
+      torrent::object_read_bencode_skip_c(input, input + strlen(input)) == input + strlen(input);
   } catch (torrent::bencode_error& e) {
     return false;
   }
@@ -100,7 +107,16 @@ bool object_stream_read_skip(const char* input) {
 
 bool object_stream_read_skip_catch(const char* input) {
   try {
+    torrent::Object tmp;
+    torrent::object_read_bencode_c(input, input + strlen(input), &tmp);
+    std::cout << "(N)";
+    return false;
+  } catch (torrent::bencode_error& e) {
+  }
+
+  try {
     torrent::object_read_bencode_skip_c(input, input + strlen(input));
+    std::cout << "(S)";
     return false;
   } catch (torrent::bencode_error& e) {
     return true;
@@ -111,6 +127,8 @@ void
 ObjectStreamTest::test_read_skip() {
   CPPUNIT_ASSERT(object_stream_read_skip("i0e"));
   CPPUNIT_ASSERT(object_stream_read_skip("i9999e"));
+  CPPUNIT_ASSERT(object_stream_read_skip("i-1e"));
+  CPPUNIT_ASSERT(object_stream_read_skip("i-9999e"));
 
   CPPUNIT_ASSERT(object_stream_read_skip("0:"));
   CPPUNIT_ASSERT(object_stream_read_skip("4:test"));
@@ -135,6 +153,11 @@ ObjectStreamTest::test_read_skip_invalid() {
   CPPUNIT_ASSERT(object_stream_read_skip_catch("1"));
   CPPUNIT_ASSERT(object_stream_read_skip_catch("d"));
 
+  CPPUNIT_ASSERT(object_stream_read_skip_catch("i-0e"));
+  CPPUNIT_ASSERT(object_stream_read_skip_catch("i--1e"));
+  CPPUNIT_ASSERT(object_stream_read_skip_catch("-1"));
+  CPPUNIT_ASSERT(object_stream_read_skip_catch("-1a"));
+
   CPPUNIT_ASSERT(object_stream_read_skip_catch("llllllll" "llllllll" "llllllll" "llllllll"
                                                "llllllll" "llllllll" "llllllll" "llllllll"
                                                "llllllll" "llllllll" "llllllll" "llllllll"
@@ -146,7 +169,12 @@ ObjectStreamTest::test_write() {
   torrent::Object obj;
 
   CPPUNIT_ASSERT(object_write_bencode(torrent::Object(), ""));
+  CPPUNIT_ASSERT(object_write_bencode(torrent::Object((int64_t)0), "i0e"));
   CPPUNIT_ASSERT(object_write_bencode(torrent::Object((int64_t)1), "i1e"));
+  CPPUNIT_ASSERT(object_write_bencode(torrent::Object((int64_t)-1), "i-1e"));
+  CPPUNIT_ASSERT(object_write_bencode(torrent::Object(INT64_C(123456789012345)), "i123456789012345e"));
+  CPPUNIT_ASSERT(object_write_bencode(torrent::Object(INT64_C(-123456789012345)), "i-123456789012345e"));
+
   CPPUNIT_ASSERT(object_write_bencode(torrent::Object("test"), "4:test"));
   CPPUNIT_ASSERT(object_write_bencode(torrent::Object::create_list(), "le"));
   CPPUNIT_ASSERT(object_write_bencode(torrent::Object::create_map(), "de"));

@@ -82,6 +82,13 @@ enum {
   LOG_RPC_INFO,
   LOG_RPC_DEBUG,
 
+  LOG_SOCKET_CRITICAL,
+  LOG_SOCKET_ERROR,
+  LOG_SOCKET_WARN,
+  LOG_SOCKET_NOTICE,
+  LOG_SOCKET_INFO,
+  LOG_SOCKET_DEBUG,
+
   LOG_STORAGE_CRITICAL,
   LOG_STORAGE_ERROR,
   LOG_STORAGE_WARN,
@@ -113,12 +120,32 @@ enum {
   LOG_GROUP_MAX_SIZE
 };
 
-#define lt_log_print(log_group, ...) { if (torrent::log_groups[log_group].valid()) torrent::log_groups[log_group].internal_print(__VA_ARGS__); }
-#define lt_log_print_info(log_group, log_info, ...) { if (torrent::log_groups[log_group].valid()) torrent::log_groups[log_group].internal_print_info(log_info, __VA_ARGS__); }
 #define lt_log_is_valid(log_group) (torrent::log_groups[log_group].valid())
+
+#define lt_log_print(log_group, ...)                                    \
+  if (torrent::log_groups[log_group].valid())                           \
+    torrent::log_groups[log_group].internal_print(NULL, NULL, NULL, NULL, __VA_ARGS__);
+
+#define lt_log_print_info(log_group, log_info, log_subsystem, ...)      \
+  if (torrent::log_groups[log_group].valid())                           \
+    torrent::log_groups[log_group].internal_print(&log_info->hash(), log_subsystem, NULL, NULL, __VA_ARGS__);
+
+#define lt_log_print_data(log_group, log_data, log_subsystem, ...)      \
+  if (torrent::log_groups[log_group].valid())                           \
+    torrent::log_groups[log_group].internal_print(&log_data->hash(), log_subsystem, NULL, NULL, __VA_ARGS__);
+
+#define lt_log_print_dump(log_group, log_dump_data, log_dump_size, ...) \
+  if (torrent::log_groups[log_group].valid())                           \
+    torrent::log_groups[log_group].internal_print(NULL, NULL, log_dump_data, log_dump_size, __VA_ARGS__); \
+
+#define lt_log_print_info_dump(log_group, log_dump_data, log_dump_size, log_info, log_subsystem, ...) \
+  if (torrent::log_groups[log_group].valid())                           \
+    torrent::log_groups[log_group].internal_print(&log_info->hash(), log_subsystem, log_dump_data, log_dump_size, __VA_ARGS__); \
 
 struct log_cached_outputs;
 class DownloadInfo;
+class download_data;
+class log_buffer;
 
 typedef std::tr1::function<void (const char*, unsigned int, int)> log_slot;
 typedef std::vector<std::pair<std::string, log_slot> >            log_output_list;
@@ -132,9 +159,13 @@ public:
 
   size_t              size_outputs() const { return std::distance(m_first, m_last); }
 
+  //
   // Internal:
-  void                internal_print(const char* fmt, ...);
-  void                internal_print_info(const DownloadInfo* info, const char* fmt, ...);
+  //
+
+  void                internal_print(const HashString* hash, const char* subsystem,
+                                     const void* dump_data, size_t dump_size,
+                                     const char* fmt, ...);
 
   uint64_t            outputs() const                    { return m_outputs; }
   uint64_t            cached_outputs() const             { return m_cached_outputs; }
@@ -166,13 +197,14 @@ void log_cleanup() LIBTORRENT_EXPORT;
 void log_open_output(const char* name, log_slot slot) LIBTORRENT_EXPORT;
 void log_close_output(const char* name) LIBTORRENT_EXPORT;
 
-void log_open_file_output(const char* name, const char* filename) LIBTORRENT_EXPORT;
-
 void log_add_group_output(int group, const char* name) LIBTORRENT_EXPORT;
 void log_remove_group_output(int group, const char* name) LIBTORRENT_EXPORT;
 
 void log_add_child(int group, int child) LIBTORRENT_EXPORT;
 void log_remove_child(int group, int child) LIBTORRENT_EXPORT;
+
+void        log_open_file_output(const char* name, const char* filename) LIBTORRENT_EXPORT;
+log_buffer* log_open_log_buffer(const char* name) LIBTORRENT_EXPORT;
 
 }
 

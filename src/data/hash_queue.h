@@ -38,14 +38,18 @@
 #define LIBTORRENT_DATA_HASH_QUEUE_H
 
 #include <deque>
-#include <rak/priority_queue_default.h>
+#include <map>
+#include <pthread.h>
+#include <tr1/functional>
 
+#include "torrent/hash_string.h"
 #include "hash_queue_node.h"
 #include "chunk_handle.h"
 
 namespace torrent {
 
 class HashChunk;
+class thread_disk;
 
 // Calculating hash of incore memory is blindingly fast, it's always
 // the loading from swap/disk that takes time. So with the exception
@@ -55,8 +59,11 @@ class HashChunk;
 
 class HashQueue : private std::deque<HashQueueNode> {
 public:
-  typedef std::deque<HashQueueNode>     base_type;
-  typedef HashQueueNode::slot_done_type slot_done_type;
+  typedef std::deque<HashQueueNode>                 base_type;
+  typedef std::map<HashChunk*, torrent::HashString> done_chunks_type;
+
+  typedef HashQueueNode::slot_done_type   slot_done_type;
+  typedef std::tr1::function<void (bool)> slot_bool;
 
   using base_type::iterator;
 
@@ -65,11 +72,13 @@ public:
 
   using base_type::begin;
   using base_type::end;
+  using base_type::front;
+  using base_type::back;
 
-  HashQueue();
-  ~HashQueue() { clear(); }
+  HashQueue(thread_disk* thread);
+  ~HashQueue() { clear(); pthread_mutex_destroy(&m_done_chunks_lock); }
 
-  void                push_back(ChunkHandle handle, slot_done_type d);
+  void                push_back(ChunkHandle handle, HashQueueNode::id_type id, slot_done_type d);
 
   bool                has(HashQueueNode::id_type id);
   bool                has(HashQueueNode::id_type id, uint32_t index);
@@ -79,26 +88,17 @@ public:
 
   void                work();
 
-  uint32_t            read_ahead() const             { return m_readAhead; }
-  void                set_read_ahead(uint32_t bytes) { m_readAhead = bytes; }
-
-  uint32_t            interval() const               { return m_interval; }
-  void                set_interval(uint32_t usec)    { m_interval = usec; }
-
-  uint32_t            max_tries() const              { return m_maxTries; }
-  void                set_max_tries(uint32_t tries)  { m_maxTries = tries; }
+  slot_bool&          slot_has_work() { return m_slot_has_work; }
 
 private:
-  bool                check(bool force);
+  void                chunk_done(HashChunk* hash_chunk, const HashString& hash_value);
 
-  inline void         willneed(int bytes);
+  thread_disk*        m_thread_disk;
 
-  uint16_t            m_tries;
-  rak::priority_item  m_taskWork;
+  done_chunks_type    m_done_chunks;
+  pthread_mutex_t     m_done_chunks_lock lt_cacheline_aligned;
 
-  uint32_t            m_readAhead;
-  uint32_t            m_interval;
-  uint32_t            m_maxTries;
+  slot_bool           m_slot_has_work;
 };
 
 }

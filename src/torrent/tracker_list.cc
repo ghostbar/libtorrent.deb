@@ -54,9 +54,9 @@
 #include "tracker_list.h"
 
 #define LT_LOG_TRACKER(log_level, log_fmt, ...)                         \
-  lt_log_print_info(LOG_TRACKER_##log_level, info(), "->tracker_list: " log_fmt, __VA_ARGS__);
+  lt_log_print_info(LOG_TRACKER_##log_level, info(), "tracker_list", log_fmt, __VA_ARGS__);
 
-namespace std { using namespace tr1; }
+namespace tr1 { using namespace std::tr1; }
 
 namespace torrent {
 
@@ -71,6 +71,21 @@ TrackerList::TrackerList() :
 bool
 TrackerList::has_active() const {
   return std::find_if(begin(), end(), std::mem_fun(&Tracker::is_busy)) != end();
+}
+
+bool
+TrackerList::has_active_not_scrape() const {
+  return std::find_if(begin(), end(), std::mem_fun(&Tracker::is_busy_not_scrape)) != end();
+}
+
+bool
+TrackerList::has_active_in_group(uint32_t group) const {
+  return std::find_if(begin_group(group), end_group(group), std::mem_fun(&Tracker::is_busy)) != end_group(group);
+}
+
+bool
+TrackerList::has_active_not_scrape_in_group(uint32_t group) const {
+  return std::find_if(begin_group(group), end_group(group), std::mem_fun(&Tracker::is_busy_not_scrape)) != end_group(group);
 }
 
 // Need a custom predicate because the is_usable function is virtual.
@@ -104,6 +119,14 @@ TrackerList::close_all_excluding(int event_bitmap) {
 }
 
 void
+TrackerList::disown_all_including(int event_bitmap) {
+  for (iterator itr = begin(); itr != end(); itr++) {
+    if ((event_bitmap & (1 << (*itr)->latest_event())))
+      (*itr)->disown();
+  }
+}
+
+void
 TrackerList::clear() {
   std::for_each(begin(), end(), rak::call_delete<Tracker>());
   base_type::clear();
@@ -127,6 +150,7 @@ TrackerList::send_state(Tracker* tracker, int new_event) {
   }
 
   tracker->send_state(new_event);
+  tracker->inc_request_counter();
 
   LT_LOG_TRACKER(INFO, "Sending '%s' to group:%u url:'%s'.",
                  option_as_string(OPTION_TRACKER_EVENT, new_event),
@@ -145,6 +169,8 @@ TrackerList::send_scrape(Tracker* tracker) {
     return;
 
   tracker->send_scrape();
+  tracker->inc_request_counter();
+
   LT_LOG_TRACKER(INFO, "Sending 'scrape' to group:%u url:'%s'.",
                  tracker->group(), tracker->url().c_str());
 }
@@ -195,8 +221,8 @@ TrackerList::insert_url(unsigned int group, const std::string& url, bool extra_t
 
 TrackerList::iterator
 TrackerList::find_url(const std::string& url) {
-  return std::find_if(begin(), end(), std::bind(std::equal_to<std::string>(), url,
-                                                std::bind(&Tracker::url, std::placeholders::_1)));
+  return std::find_if(begin(), end(), tr1::bind(std::equal_to<std::string>(), url,
+                                                tr1::bind(&Tracker::url, tr1::placeholders::_1)));
 }
 
 TrackerList::iterator
@@ -243,6 +269,11 @@ TrackerList::find_next_to_request(iterator itr) {
 
 TrackerList::iterator
 TrackerList::begin_group(unsigned int group) {
+  return std::find_if(begin(), end(), rak::less_equal(group, std::mem_fun(&Tracker::group)));
+}
+
+TrackerList::const_iterator
+TrackerList::begin_group(unsigned int group) const {
   return std::find_if(begin(), end(), rak::less_equal(group, std::mem_fun(&Tracker::group)));
 }
 

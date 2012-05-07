@@ -48,9 +48,9 @@
 #include "globals.h"
 
 #define LT_LOG_TRACKER(log_level, log_fmt, ...)                         \
-  lt_log_print_info(LOG_TRACKER_##log_level, m_tracker_list->info(), "->tracker_controller: " log_fmt, __VA_ARGS__);
+  lt_log_print_info(LOG_TRACKER_##log_level, m_tracker_list->info(), "tracker_controller", log_fmt, __VA_ARGS__);
 
-namespace std { using namespace tr1; }
+namespace tr1 { using namespace std::tr1; }
 
 namespace torrent {
 
@@ -91,8 +91,8 @@ TrackerController::TrackerController(TrackerList* trackers) :
   m_tracker_list(trackers),
   m_private(new tracker_controller_private) {
 
-  m_private->task_timeout.set_slot(rak::mem_fn(this, &TrackerController::do_timeout));
-  m_private->task_scrape.set_slot(rak::mem_fn(this, &TrackerController::do_scrape));
+  m_private->task_timeout.slot() = std::tr1::bind(&TrackerController::do_timeout, this);
+  m_private->task_scrape.slot() = std::tr1::bind(&TrackerController::do_scrape, this);
 }
 
 TrackerController::~TrackerController() {
@@ -281,15 +281,18 @@ TrackerController::send_update_event() {
 
 // Currently being used by send_state, fixme.
 void
-TrackerController::close() {
+TrackerController::close(int flags) {
   m_flags &= ~(flag_requesting | flag_promiscuous_mode);
+
+  if ((flags & (close_disown_stop | close_disown_completed)))
+    m_tracker_list->disown_all_including(close_disown_stop | close_disown_completed);
 
   m_tracker_list->close_all();
   priority_queue_erase(&taskScheduler, &m_private->task_timeout);
 }
 
 void
-TrackerController::enable() {
+TrackerController::enable(int enable_flags) {
   if ((m_flags & flag_active))
     return;
 
@@ -299,7 +302,10 @@ TrackerController::enable() {
   m_flags &= ~flag_send_stop;
 
   m_tracker_list->close_all_excluding((1 << Tracker::EVENT_COMPLETED));
-  m_tracker_list->clear_stats();
+  
+  if (!(enable_flags & enable_dont_reset_stats))
+    m_tracker_list->clear_stats();
+
   LT_LOG_TRACKER(INFO, "Called enable with %u trackers.", m_tracker_list->size());
 
   // Adding of the tracker requests gets done after the caller has had
@@ -328,6 +334,8 @@ TrackerController::start_requesting() {
 
   m_flags |= flag_requesting;
   update_timeout(0);
+
+  LT_LOG_TRACKER(INFO, "Start requesting.", 0);
 }
 
 void
@@ -336,6 +344,8 @@ TrackerController::stop_requesting() {
     return;
 
   m_flags &= ~flag_requesting;
+
+  LT_LOG_TRACKER(INFO, "Stop requesting.", 0);
 }
 
 uint32_t
@@ -381,24 +391,43 @@ tracker_next_timeout_promiscuous(Tracker* tracker) {
       !tracker->is_usable())
     return ~uint32_t();
 
-  std::pair<int, int> timeout_base;
+  int32_t interval;
 
   if (tracker->failed_counter())
-    timeout_base = std::make_pair(5, tracker->failed_counter() - 1);
-  else if (tracker->latest_sum_peers() < 10)
-    timeout_base = std::make_pair(10, tracker->success_counter());
-  else if (tracker->latest_new_peers() < 10)
-    timeout_base = std::make_pair(30, tracker->success_counter());
+    interval = 5 << std::min<int>(tracker->failed_counter() - 1, 6);
+  else if (tracker->success_counter() < 2 && tracker->latest_sum_peers() < 10)
+    interval = 10 << tracker->success_counter();
   else
-    // We got peers from this tracker, re-request a bit sooner.
-    timeout_base = std::make_pair(5, tracker->success_counter());
+    interval = tracker->normal_interval();
 
-  int32_t min_interval = std::min((int)tracker->min_interval(), 600);
+  int32_t min_interval = std::min(tracker->min_interval(), (uint32_t)600);
+  int32_t use_interval = std::min(interval, min_interval);
 
-  int32_t tracker_timeout = std::min(min_interval, (timeout_base.first << std::min(timeout_base.second, 6)));
   int32_t since_last = cachedTime.seconds() - (int32_t)tracker->activity_time_last();
 
-  return std::max(tracker_timeout - since_last, 0);
+  return std::max(use_interval - since_last, 0);
+}
+
+TrackerList::iterator
+tracker_find_preferred(TrackerList::iterator first, TrackerList::iterator last, uint32_t* next_timeout) {
+  TrackerList::iterator preferred = last;
+  uint32_t preferred_time_last = ~uint32_t();
+
+  for (; first != last; first++) {
+    uint32_t tracker_timeout = tracker_next_timeout_promiscuous(*first);
+
+    if (tracker_timeout != 0) {
+      *next_timeout = std::min(tracker_timeout, *next_timeout);
+      continue;
+    }
+
+    if ((*first)->activity_time_last() < preferred_time_last) {
+      preferred = first;
+      preferred_time_last = (*first)->activity_time_last();
+    }
+  }
+
+  return preferred;
 }
 
 void
@@ -406,40 +435,70 @@ TrackerController::do_timeout() {
   if (!(m_flags & flag_active) || !m_tracker_list->has_usable())
     return;
 
+  priority_queue_erase(&taskScheduler, &m_private->task_timeout);
+
   int send_state = current_send_state();
 
   if ((m_flags & (flag_promiscuous_mode | flag_requesting))) {
     uint32_t next_timeout = ~uint32_t();
 
-    for (TrackerList::iterator itr = m_tracker_list->begin(); itr != m_tracker_list->end(); itr++) {
-      uint32_t tracker_timeout = tracker_next_timeout_promiscuous(*itr);
+    TrackerList::iterator itr = m_tracker_list->begin();
 
-      if (tracker_timeout == 0)
-        m_tracker_list->send_state_itr(itr, send_state);
-      else
-        next_timeout = std::min(tracker_timeout, next_timeout);
+    while (itr != m_tracker_list->end()) {
+      uint32_t group = (*itr)->group();
+
+      if (m_tracker_list->has_active_not_scrape_in_group(group)) {
+        itr = m_tracker_list->end_group(group);
+        continue;
+      }
+
+      TrackerList::iterator group_end = m_tracker_list->end_group((*itr)->group());
+      TrackerList::iterator preferred = itr;
+
+      if (!(*itr)->is_usable() || (*itr)->failed_counter()) {
+        // The selected tracker in the group is either disabled or not
+        // reachable, try the others to find a new one to use.
+        preferred = tracker_find_preferred(preferred, group_end, &next_timeout);
+
+      } else {
+        uint32_t tracker_timeout = tracker_next_timeout_promiscuous(*preferred);
+
+        if (tracker_timeout != 0) {
+          next_timeout = std::min(tracker_timeout, next_timeout);
+          preferred = group_end;
+        }
+      }
+
+      if (preferred != group_end)
+        m_tracker_list->send_state_itr(preferred, send_state);
+
+      itr = group_end;
     }
 
     if (next_timeout != ~uint32_t())
       update_timeout(next_timeout);
 
   // TODO: Send for start/completed also?
-  } else if ((m_flags & flag_send_update)) {
-    TrackerList::iterator itr = m_tracker_list->find_next_to_request(m_tracker_list->begin());
-
-    // TODO: Also watch out for failed trackers requiring timeouts.
-
-    m_tracker_list->send_state_itr(itr, send_state);
-
   } else {
     TrackerList::iterator itr = m_tracker_list->find_next_to_request(m_tracker_list->begin());
 
-    int32_t next_timeout = (*itr)->failed_counter() == 0 ? (*itr)->success_time_next() : (*itr)->failed_time_next();
+    if (itr == m_tracker_list->end())
+      return;
 
-    if (next_timeout <= cachedTime.seconds())
+    if ((m_flags & flag_send_update)) {
+      // TODO: Also watch out for failed trackers requiring timeouts.
       m_tracker_list->send_state_itr(itr, send_state);
-    else
-      update_timeout(next_timeout - cachedTime.seconds());
+
+    } else {
+      TrackerList::iterator itr = m_tracker_list->find_next_to_request(m_tracker_list->begin());
+
+      int32_t next_timeout = (*itr)->activity_time_next();
+
+      if (next_timeout <= cachedTime.seconds())
+        m_tracker_list->send_state_itr(itr, send_state);
+      else
+        update_timeout(next_timeout - cachedTime.seconds());
+    }
   }
 
   if (m_slot_timeout)
@@ -448,8 +507,29 @@ TrackerController::do_timeout() {
 
 void
 TrackerController::do_scrape() {
-  std::for_each(m_tracker_list->begin(), m_tracker_list->end(),
-                std::bind(&TrackerList::send_scrape, m_tracker_list, std::placeholders::_1));
+  TrackerList::iterator itr = m_tracker_list->begin();
+
+  while (itr != m_tracker_list->end()) {
+    uint32_t group = (*itr)->group();
+
+    if (m_tracker_list->has_active_in_group(group)) {
+      itr = m_tracker_list->end_group(group);
+      continue;
+    }
+
+    TrackerList::iterator group_end = m_tracker_list->end_group((*itr)->group());
+
+    while (itr != group_end) {
+      if ((*itr)->can_scrape() && (*itr)->is_usable()) {
+        m_tracker_list->send_scrape(*itr);
+        break;
+      }
+
+      itr++;
+    }
+
+    itr = group_end;
+  }  
 }
 
 uint32_t

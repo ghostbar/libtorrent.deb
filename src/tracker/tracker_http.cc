@@ -36,6 +36,8 @@
 
 #include "config.h"
 
+#define __STDC_FORMAT_MACROS
+
 #include <iomanip>
 #include <sstream>
 #include <rak/functional.h>
@@ -49,6 +51,7 @@
 #include "torrent/object_stream.h"
 #include "torrent/tracker_list.h"
 #include "torrent/utils/log.h"
+#include "torrent/utils/option_strings.h"
 
 #include "tracker_http.h"
 
@@ -56,20 +59,23 @@
 #include "manager.h"
 
 #define LT_LOG_TRACKER(log_level, log_fmt, ...)                         \
-  lt_log_print_info(LOG_TRACKER_##log_level, m_parent->info(), "->tracker[%u]: " log_fmt, group(), __VA_ARGS__);
+  lt_log_print_info(LOG_TRACKER_##log_level, m_parent->info(), "tracker", "[%u] " log_fmt, group(), __VA_ARGS__);
 
-namespace std { using namespace tr1; }
+#define LT_LOG_TRACKER_DUMP(log_level, log_dump_data, log_dump_size, log_fmt, ...)                   \
+  lt_log_print_info_dump(LOG_TRACKER_##log_level, log_dump_data, log_dump_size, m_parent->info(), "tracker", "[%u] " log_fmt, group(), __VA_ARGS__);
+
+namespace tr1 { using namespace std::tr1; }
 
 namespace torrent {
 
 TrackerHttp::TrackerHttp(TrackerList* parent, const std::string& url, int flags) :
   Tracker(parent, url, flags),
 
-  m_get(Http::call_factory()),
+  m_get(Http::slot_factory()()),
   m_data(NULL) {
 
-  m_get->signal_done().push_back(std::bind(&TrackerHttp::receive_done, this));
-  m_get->signal_failed().push_back(std::bind(&TrackerHttp::receive_failed, this, std::placeholders::_1));
+  m_get->signal_done().push_back(tr1::bind(&TrackerHttp::receive_done, this));
+  m_get->signal_failed().push_back(tr1::bind(&TrackerHttp::receive_failed, this, tr1::placeholders::_1));
 
   // Haven't considered if this needs any stronger error detection,
   // can dropping the '?' be used for malicious purposes?
@@ -109,7 +115,7 @@ TrackerHttp::request_prefix(std::stringstream* stream, const std::string& url) {
 
 void
 TrackerHttp::send_state(int state) {
-  close();
+  close_directly();
 
   if (m_parent == NULL)
     throw internal_error("TrackerHttp::send_state(...) does not have a valid m_parent.");
@@ -150,9 +156,13 @@ TrackerHttp::send_state(int state) {
   if (manager->connection_manager()->listen_port())
     s << "&port=" << manager->connection_manager()->listen_port();
 
-  s << "&uploaded=" << info->uploaded_adjusted()
-    << "&downloaded=" << info->completed_adjusted()
-    << "&left=" << info->slot_left()();
+  uint64_t uploaded_adjusted = info->uploaded_adjusted();
+  uint64_t completed_adjusted = info->completed_adjusted();
+  uint64_t download_left = info->slot_left()();
+
+  s << "&uploaded=" << uploaded_adjusted
+    << "&downloaded=" << completed_adjusted
+    << "&left=" << download_left;
 
   switch(state) {
   case DownloadInfo::STARTED:
@@ -172,7 +182,10 @@ TrackerHttp::send_state(int state) {
 
   std::string request_url = s.str();
 
-  LT_LOG_TRACKER(DEBUG, "Tracker HTTP Request ---\n%*s\n---", request_url.size(), request_url.c_str());
+  LT_LOG_TRACKER_DUMP(DEBUG, request_url.c_str(), request_url.size(),
+                      "Tracker HTTP request: state:%s up_adj:%" PRIu64 " completed_adj:%" PRIu64 " left_adj:%" PRIu64 ".",
+                      option_as_string(OPTION_TRACKER_EVENT, state),
+                      uploaded_adjusted, completed_adjusted, download_left);
 
   m_get->set_url(request_url);
   m_get->set_stream(m_data);
@@ -197,7 +210,7 @@ TrackerHttp::send_scrape() {
 
   std::string request_url = s.str();
 
-  LT_LOG_TRACKER(DEBUG, "Tracker HTTP Scrape ---\n%*s\n---", request_url.size(), request_url.c_str());
+  LT_LOG_TRACKER_DUMP(DEBUG, request_url.c_str(), request_url.size(), "Tracker HTTP scrape.", 0);
   
   m_get->set_url(request_url);
   m_get->set_stream(m_data);
@@ -211,10 +224,27 @@ TrackerHttp::close() {
   if (m_data == NULL)
     return;
 
-  m_get->close();
-  m_get->set_stream(NULL);
+  LT_LOG_TRACKER(DEBUG, "Tracker HTTP request cancelled: state:%s url:%s.",
+                 option_as_string(OPTION_TRACKER_EVENT, m_latest_event), m_url.c_str());
 
-  delete m_data;
+  close_directly();
+}
+
+void
+TrackerHttp::disown() {
+  if (m_data == NULL)
+    return;
+
+  LT_LOG_TRACKER(DEBUG, "Tracker HTTP request disowned: state:%s url:%s.",
+                 option_as_string(OPTION_TRACKER_EVENT, m_latest_event), m_url.c_str());
+  
+  m_get->set_delete_self();
+  m_get->set_delete_stream();
+  m_get->signal_done().clear();
+  m_get->signal_failed().clear();
+
+  // Allocate this dynamically, so that we don't need to do this here.
+  m_get = Http::slot_factory()();
   m_data = NULL;
 }
 
@@ -224,13 +254,25 @@ TrackerHttp::type() const {
 }
 
 void
+TrackerHttp::close_directly() {
+  if (m_data == NULL)
+    return;
+
+  m_get->close();
+  m_get->set_stream(NULL);
+
+  delete m_data;
+  m_data = NULL;
+}
+
+void
 TrackerHttp::receive_done() {
   if (m_data == NULL)
     throw internal_error("TrackerHttp::receive_done() called on an invalid object");
 
   if (lt_log_is_valid(LOG_TRACKER_DEBUG)) {
     std::string dump = m_data->str();
-    LT_LOG_TRACKER(DEBUG, "Tracker HTTP receive done ---\n%*s\n---", dump.size(), dump.c_str());
+    LT_LOG_TRACKER_DUMP(DEBUG, dump.c_str(), dump.size(), "Tracker HTTP reply.", 0);
   }
 
   Object b;
@@ -259,10 +301,10 @@ void
 TrackerHttp::receive_failed(std::string msg) {
   if (lt_log_is_valid(LOG_TRACKER_DEBUG)) {
     std::string dump = m_data->str();
-    LT_LOG_TRACKER(DEBUG, "Tracker HTTP receive failed ---\n%*s\n---", dump.size(), dump.c_str());
+    LT_LOG_TRACKER_DUMP(DEBUG, dump.c_str(), dump.size(), "Tracker HTTP failed.", 0);
   }
 
-  close();
+  close_directly();
 
   if (m_latest_event == EVENT_SCRAPE)
     m_parent->receive_scrape_failed(this, msg);
@@ -305,7 +347,7 @@ TrackerHttp::process_success(const Object& object) {
     return receive_failed(e.what());
   }
 
-  close();
+  close_directly();
   m_parent->receive_success(this, &l);
 }
 
@@ -334,7 +376,7 @@ TrackerHttp::process_scrape(const Object& object) {
   LT_LOG_TRACKER(INFO, "Tracker scrape for %u torrents: complete:%u incomplete:%u downloaded:%u.",
                  files.as_map().size(), m_scrape_complete, m_scrape_incomplete, m_scrape_downloaded);
 
-  close();
+  close_directly();
   m_parent->receive_scrape_success(this);
 }
 
