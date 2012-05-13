@@ -1,8 +1,11 @@
 libtorrent (0.13.2-1) unstable; urgency=low
 
   * New upstream version.
+  * Run the test suite at build time.
+  * Let upstream's configure script choose between Linux's fallocate(2) and
+    posix_fallocate(3).
 
- -- Benoît Knecht <benoit.knecht@fsfe.org>  Mon, 07 May 2012 18:07:22 +0200
+ -- Benoît Knecht <benoit.knecht@fsfe.org>  Mon, 14 May 2012 01:26:41 +0200
 
 libtorrent (0.13.0-1) UNRELEASED; urgency=low
 
