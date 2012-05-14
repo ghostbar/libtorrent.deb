@@ -1,13 +1,13 @@
 libtorrent (0.13.2-1) unstable; urgency=low
 
-  * New upstream version.
+  * New upstream version. Closes: #632315.
   * Run the test suite at build time.
   * Let upstream's configure script choose between Linux's fallocate(2) and
     posix_fallocate(3).
   * Put the complete MPL-1.1 in debian/copyright, as required by debian policy
     12.5.
 
- -- Benoît Knecht <benoit.knecht@fsfe.org>  Mon, 14 May 2012 02:23:30 +0200
+ -- Benoît Knecht <benoit.knecht@fsfe.org>  Mon, 14 May 2012 11:43:37 +0200
 
 libtorrent (0.13.0-1) UNRELEASED; urgency=low
 
