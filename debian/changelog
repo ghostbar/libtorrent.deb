@@ -1,11 +1,20 @@
-libtorrent (0.13.2-1) unstable; urgency=low
+libtorrent (0.13.2-1~1.gbp47d809) UNRELEASED; urgency=low
 
+  ** SNAPSHOT build @47d80918068a38ffe52762542383fb1b46dde2a2 **
+
+  [ Benoît Knecht ]
   * New upstream version. Closes: #632315.
   * Run the test suite at build time.
   * Let upstream's configure script choose between Linux's fallocate(2) and
     posix_fallocate(3).
   * Put the complete MPL-1.1 in debian/copyright, as required by debian policy
     12.5.
+
+  [ Rogério Brito ]
+  * debian/control:
+    + Remove useless coding indication.
+    + Add Benoît to the list of uploaders. Thanks for reviving this!
+  * debian/copyright: Update my copyright years.
 
  -- Benoît Knecht <benoit.knecht@fsfe.org>  Mon, 14 May 2012 11:43:37 +0200
 
