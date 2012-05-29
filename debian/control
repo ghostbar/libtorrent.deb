@@ -5,7 +5,8 @@ Maintainer: Jose Luis Rivas <ghostbar@debian.org>
 DM-Upload-Allowed: yes
 Uploaders:
  Rogério Brito <rbrito@ime.usp.br>,
- Dmitry E. Oboukhov <unera@debian.org>
+ Dmitry E. Oboukhov <unera@debian.org>,
+ Benoît Knecht <benoit.knecht@fsfe.org>
 Build-Depends:
  debhelper (>= 9),
  dh-autoreconf,
