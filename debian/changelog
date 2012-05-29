@@ -1,6 +1,4 @@
-libtorrent (0.13.2-1~1.gbp47d809) UNRELEASED; urgency=low
-
-  ** SNAPSHOT build @47d80918068a38ffe52762542383fb1b46dde2a2 **
+libtorrent (0.13.2-1) unstable; urgency=low
 
   [ Benoît Knecht ]
   * New upstream version. Closes: #632315.
@@ -16,7 +14,7 @@ libtorrent (0.13.2-1~1.gbp47d809) UNRELEASED; urgency=low
     + Add Benoît to the list of uploaders. Thanks for reviving this!
   * debian/copyright: Update my copyright years.
 
- -- Benoît Knecht <benoit.knecht@fsfe.org>  Mon, 14 May 2012 11:43:37 +0200
+ -- Rogério Brito <rbrito@ime.usp.br>  Tue, 29 May 2012 01:19:37 -0300
 
 libtorrent (0.13.0-1) UNRELEASED; urgency=low
 
