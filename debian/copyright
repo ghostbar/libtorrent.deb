@@ -14,7 +14,7 @@ License: GPL-2+
 Files: debian/*
 Copyright: © 2005-2006 Qingning Huo <qhuo@mayhq.co.uk>
 	   © 2006-2008 Jose Luis Rivas <ghostbar38@gmail.com>
-	   © 2009-2011 Rogério Theodoro de Brito <rbrito@ime.usp.br>
+	   © 2009-2012 Rogério Theodoro de Brito <rbrito@ime.usp.br>
 License: GPL-2+
 
 Files: src/utils/sha_fast.*
