@@ -65,12 +65,14 @@ public:
   virtual ~internal_error() throw() {}
 
   virtual const char* what() const throw() { return m_msg.c_str(); }
+  const std::string&  backtrace() const throw() { return m_backtrace; }
 
 private:
   // Use this function for breaking on throws.
   void initialize(const std::string& msg);
 
   std::string m_msg;
+  std::string m_backtrace;
 };
 
 // For some reason we couldn't talk with a protocol/tracker, migth be a
@@ -101,6 +103,21 @@ public:
   virtual ~connection_error() throw() {}
 
   virtual const char* what() const throw();
+
+  int get_errno() const { return m_errno; }
+
+private:
+  int m_errno;
+};
+
+class LIBTORRENT_EXPORT address_info_error : public network_error {
+public:
+  address_info_error(int err) : m_errno(err) {}
+  virtual ~address_info_error() throw() {}
+
+  virtual const char* what() const throw();
+
+  int get_errno() const { return m_errno; }
 
 private:
   int m_errno;

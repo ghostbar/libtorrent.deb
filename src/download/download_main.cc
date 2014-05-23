@@ -57,12 +57,16 @@
 #include "torrent/peer/peer_info.h"
 #include "torrent/tracker_controller.h"
 #include "torrent/tracker_list.h"
+#include "torrent/utils/log.h"
 
 #include "available_list.h"
 #include "chunk_selector.h"
 #include "chunk_statistics.h"
 #include "download_main.h"
 #include "download_wrapper.h"
+
+#define LT_LOG_THIS(log_level, log_fmt, ...)                         \
+  lt_log_print_info(LOG_TORRENT_##log_level, m_ptr->info(), "download", log_fmt, __VA_ARGS__);
 
 namespace tr1 { using namespace std::tr1; }
 
@@ -111,13 +115,13 @@ DownloadMain::DownloadMain() :
 
   m_connectionList = new ConnectionList(this);
 
-  m_delegator.slot_chunk_find(rak::make_mem_fun(m_chunkSelector, &ChunkSelector::find));
-  m_delegator.slot_chunk_size(rak::make_mem_fun(file_list(), &FileList::chunk_index_size));
+  m_delegator.slot_chunk_find() = std::tr1::bind(&ChunkSelector::find, m_chunkSelector, tr1::placeholders::_1, tr1::placeholders::_2);
+  m_delegator.slot_chunk_size() = std::tr1::bind(&FileList::chunk_index_size, file_list(), tr1::placeholders::_1);
 
-  m_delegator.transfer_list()->slot_canceled(std::bind1st(std::mem_fun(&ChunkSelector::not_using_index), m_chunkSelector));
-  m_delegator.transfer_list()->slot_queued(std::bind1st(std::mem_fun(&ChunkSelector::using_index), m_chunkSelector));
-  m_delegator.transfer_list()->slot_completed(std::bind1st(std::mem_fun(&DownloadMain::receive_chunk_done), this));
-  m_delegator.transfer_list()->slot_corrupt(std::bind1st(std::mem_fun(&DownloadMain::receive_corrupt_chunk), this));
+  m_delegator.transfer_list()->slot_canceled()  = std::tr1::bind(&ChunkSelector::not_using_index, m_chunkSelector, tr1::placeholders::_1);
+  m_delegator.transfer_list()->slot_queued()    = std::tr1::bind(&ChunkSelector::using_index, m_chunkSelector, tr1::placeholders::_1);
+  m_delegator.transfer_list()->slot_completed() = std::tr1::bind(&DownloadMain::receive_chunk_done, this, tr1::placeholders::_1);
+  m_delegator.transfer_list()->slot_corrupt()   = std::tr1::bind(&DownloadMain::receive_corrupt_chunk, this, tr1::placeholders::_1);
 
   m_delayDisconnectPeers.slot() = std::tr1::bind(&ConnectionList::disconnect_queued, m_connectionList);
   m_taskTrackerRequest.slot() = std::tr1::bind(&DownloadMain::receive_tracker_request, this);
@@ -155,7 +159,7 @@ std::pair<ThrottleList*, ThrottleList*>
 DownloadMain::throttles(const sockaddr* sa) {
   ThrottlePair pair = ThrottlePair(NULL, NULL);
 
-  if (!manager->connection_manager()->address_throttle().empty())
+  if (manager->connection_manager()->address_throttle())
     pair = manager->connection_manager()->address_throttle()(sa);
 
   return std::make_pair(pair.first == NULL ? upload_throttle() : pair.first->throttle_list(),
@@ -348,17 +352,24 @@ DownloadMain::receive_tracker_success() {
     return;
 
   priority_queue_erase(&taskScheduler, &m_taskTrackerRequest);
-  priority_queue_insert(&taskScheduler, &m_taskTrackerRequest, (cachedTime + rak::timer::from_seconds(30)).round_seconds());
+  priority_queue_insert(&taskScheduler, &m_taskTrackerRequest, (cachedTime + rak::timer::from_seconds(10)).round_seconds());
 }
 
 void
 DownloadMain::receive_tracker_request() {
-  if (connection_list()->size() + peer_list()->available_list()->size() / 2 >= connection_list()->min_size()) {
-    m_tracker_controller->stop_requesting();
-    return;
-  }
+  bool should_stop = false;
+  bool should_start = false;
 
-  m_tracker_controller->start_requesting();
+  if (info()->is_pex_enabled() && info()->size_pex() > 0)
+    should_stop = true;
+
+  if (connection_list()->size() + peer_list()->available_list()->size() / 2 < connection_list()->min_size())
+    should_start = true;
+
+  if (should_stop)
+    m_tracker_controller->stop_requesting();
+  else if (should_start)
+    m_tracker_controller->start_requesting();
 }
 
 struct SocketAddressCompact_less {

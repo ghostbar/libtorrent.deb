@@ -1,5 +1,6 @@
-
 TESTS = LibTorrentTest
+AUTOMAKE_OPTIONS = subdir-objects
+
 check_PROGRAMS = $(TESTS)
 LibTorrentTest_LDADD = \
 	../src/libtorrent.la \
@@ -30,6 +31,8 @@ LibTorrentTest_SOURCES = \
 	data/hash_check_queue_test.h \
 	data/hash_queue_test.cc \
 	data/hash_queue_test.h \
+	protocol/test_request_list.cc \
+	protocol/test_request_list.h \
 	torrent/http_test.cc \
 	torrent/http_test.h \
 	torrent/object_test.cc \
@@ -44,20 +47,26 @@ LibTorrentTest_SOURCES = \
 	torrent/tracker_controller_test.h \
 	torrent/tracker_controller_features.cc \
 	torrent/tracker_controller_features.h \
+	torrent/tracker_controller_requesting.cc \
+	torrent/tracker_controller_requesting.h \
 	torrent/tracker_list_test.cc \
 	torrent/tracker_list_test.h \
 	torrent/tracker_list_features_test.cc \
 	torrent/tracker_list_features_test.h \
 	torrent/tracker_timeout_test.cc \
 	torrent/tracker_timeout_test.h \
-	torrent/utils/extents_test.cc \
-	torrent/utils/extents_test.h \
 	torrent/utils/log_test.cc \
 	torrent/utils/log_test.h \
 	torrent/utils/log_buffer_test.cc \
 	torrent/utils/log_buffer_test.h \
+	torrent/utils/net_test.cc \
+	torrent/utils/net_test.h \
 	torrent/utils/option_strings_test.cc \
 	torrent/utils/option_strings_test.h \
+	torrent/utils/test_extents.cc \
+	torrent/utils/test_extents.h \
+	torrent/utils/test_queue_buckets.cc \
+	torrent/utils/test_queue_buckets.h \
 	torrent/utils/signal_bitfield_test.cc \
 	torrent/utils/signal_bitfield_test.h \
 	torrent/utils/thread_base_test.cc \
@@ -69,4 +78,4 @@ LibTorrentTest_SOURCES = \
 LibTorrentTest_CXXFLAGS = $(CPPUNIT_CFLAGS)
 LibTorrentTest_LDFLAGS = $(CPPUNIT_LIBS)  -ldl
 
-INCLUDES = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/src
+AM_CPPFLAGS = -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/src

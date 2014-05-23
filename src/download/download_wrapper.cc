@@ -39,7 +39,6 @@
 #include <iterator>
 #include <stdlib.h>
 #include <rak/file_stat.h>
-#include <sigc++/adaptors/bind.h>
 
 #include "data/chunk_list.h"
 #include "data/hash_queue.h"
@@ -56,11 +55,15 @@
 #include "torrent/peer/connection_list.h"
 #include "torrent/tracker_controller.h"
 #include "torrent/tracker_list.h"
+#include "torrent/utils/log.h"
 
 #include "available_list.h"
 #include "chunk_selector.h"
 
 #include "download_wrapper.h"
+
+#define LT_LOG_STORAGE_ERRORS(log_fmt, ...)                             \
+  lt_log_print_info(LOG_PROTOCOL_STORAGE_ERRORS, this->info(), "storage_errors", log_fmt, __VA_ARGS__);
 
 namespace tr1 { using namespace std::tr1; }
 
@@ -75,6 +78,7 @@ DownloadWrapper::DownloadWrapper() :
 
   m_main->delay_download_done().slot() = std::tr1::bind(&download_data::call_download_done, data());
 
+  m_main->peer_list()->set_info(info());
   m_main->tracker_list()->set_info(info());
   m_main->tracker_controller()->slot_success() = tr1::bind(&DownloadWrapper::receive_tracker_success, this, tr1::placeholders::_1);
   m_main->tracker_controller()->slot_failure() = tr1::bind(&DownloadWrapper::receive_tracker_failed, this, tr1::placeholders::_1);
@@ -108,8 +112,8 @@ DownloadWrapper::initialize(const std::string& hash, const std::string& id) {
 
   info()->mutable_local_id().assign(id.c_str());
 
-  info()->slot_left() = sigc::mem_fun(m_main->file_list(), &FileList::left_bytes);
-  info()->slot_completed() = sigc::mem_fun(m_main->file_list(), &FileList::completed_bytes);
+  info()->slot_left()      = tr1::bind(&FileList::left_bytes, m_main->file_list());
+  info()->slot_completed() = tr1::bind(&FileList::completed_bytes, m_main->file_list());
 
   file_list()->mutable_data()->mutable_hash().assign(hash.c_str());
 
@@ -119,9 +123,7 @@ DownloadWrapper::initialize(const std::string& hash, const std::string& id) {
   m_hashChecker = new HashTorrent(m_main->chunk_list());
 
   // Connect various signals and slots.
-  m_hashChecker->slot_check(rak::make_mem_fun(this, &DownloadWrapper::check_chunk_hash));
-//   m_hashChecker->slot_storage_error(rak::make_mem_fun(this, &DownloadWrapper::receive_storage_error));
-
+  m_hashChecker->slot_check_chunk() = std::tr1::bind(&DownloadWrapper::check_chunk_hash, this, std::tr1::placeholders::_1);
   m_hashChecker->delay_checked().slot() = std::tr1::bind(&DownloadWrapper::receive_initial_hash, this);
 }
 
@@ -223,12 +225,9 @@ DownloadWrapper::receive_hash_done(ChunkHandle handle, const char* hash) {
       else
         m_main->have_queue()->push_front(DownloadMain::have_queue_type::value_type(cachedTime, handle.index()));
 
-      rak::slot_list_call(info()->signal_chunk_passed(), handle.index());
-
     } else {
       // This needs to ensure the chunk is still valid.
       m_main->delegator()->transfer_list()->hash_failed(handle.index(), handle.chunk());
-      rak::slot_list_call(info()->signal_chunk_failed(), handle.index());
     }
   }
 
@@ -252,7 +251,7 @@ DownloadWrapper::receive_storage_error(const std::string& str) {
   m_main->tracker_controller()->disable();
   m_main->tracker_controller()->close();
 
-  rak::slot_list_call(info()->signal_storage_error(), str);
+  LT_LOG_STORAGE_ERRORS("%s", str.c_str());
 }
 
 uint32_t
