@@ -1,3 +1,9 @@
+libtorrent (0.13.4-1) UNRELEASED; urgency=medium
+
+  * New upstream version
+
+ -- Jose Luis Rivas <ghostbar@debian.org>  Fri, 23 May 2014 13:03:43 -0700
+
 libtorrent (0.13.2-1) unstable; urgency=low
 
   [ Benoît Knecht ]
