@@ -1,10 +1,11 @@
-libtorrent (0.13.4-1) UNRELEASED; urgency=low
+libtorrent (0.13.4-1) experimental; urgency=low
 
+  * Upload to experimental.
   * New upstream version.
   * Remove obsolete DM-Upload-Allowed from debian/control
   * Add myself to Uploaders.
 
- -- Jonathan McDowell <noodles@earth.li>  Mon, 01 Dec 2014 16:04:04 +0000
+ -- Jonathan McDowell <noodles@earth.li>  Sun, 21 Dec 2014 23:20:55 +0000
 
 libtorrent (0.13.2-1) unstable; urgency=low
 
