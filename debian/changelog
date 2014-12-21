@@ -2,6 +2,7 @@ libtorrent (0.13.4-1) UNRELEASED; urgency=low
 
   * New upstream version.
   * Remove obsolete DM-Upload-Allowed from debian/control
+  * Add myself to Uploaders.
 
  -- Jonathan McDowell <noodles@earth.li>  Mon, 01 Dec 2014 16:04:04 +0000
 
