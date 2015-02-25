@@ -1,10 +1,31 @@
 #!/usr/bin/make -f
 
+CONFOPTS = --enable-ipv6
+# Disable instrumentation on following archs due to use of
+# __sync_fetch_and_and_8 with instrumentation.
+# See https://github.com/rakshasa/rtorrent/issues/156
+ifeq ($(DEB_HOST_ARCH), mips)
+CONFOPTS += --disable-instrumentation
+override_dh_auto_test:
+endif
+ifeq ($(DEB_HOST_ARCH), mipsel)
+CONFOPTS += --disable-instrumentation
+override_dh_auto_test:
+endif
+ifeq ($(DEB_HOST_ARCH), powerpc)
+CONFOPTS += --disable-instrumentation
+override_dh_auto_test:
+endif
+ifeq ($(DEB_HOST_ARCH), sparc)
+CONFOPTS += --disable-instrumentation
+override_dh_auto_test:
+endif
+
 %:
 	dh $@ --with autoreconf --parallel
 
 override_dh_auto_configure:
-	dh_auto_configure -- --enable-ipv6
+	dh_auto_configure -- $(CONFOPTS)
 
 override_dh_installchangelogs:
 	dh_installchangelogs debian/ChangeLog
