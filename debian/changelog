@@ -1,11 +1,11 @@
-libtorrent (0.13.4-2) UNRELEASED; urgency=low
+libtorrent (0.13.4-2) experimental; urgency=low
 
   * Disable instrumentation / autotests on mips/mipsel/powerpc/sparc to fix
     FTBFS.
   * Bump Standards-Version to 3.9.6.
     + No changes.
 
- -- Jonathan McDowell <noodles@earth.li>  Wed, 25 Feb 2015 16:12:06 +0000
+ -- Jonathan McDowell <noodles@earth.li>  Wed, 25 Feb 2015 16:44:47 +0000
 
 libtorrent (0.13.4-1) experimental; urgency=low
 
