@@ -14,7 +14,7 @@ Build-Depends:
  libcurl4-openssl-dev,
  libsigc++-2.0-dev,
  libssl-dev
-Standards-Version: 3.9.3
+Standards-Version: 3.9.6
 Vcs-git: git://git.debian.org/git/collab-maint/libtorrent.git
 Vcs-browser: http://git.debian.org/?p=collab-maint/libtorrent.git;a=summary
 Homepage: http://libtorrent.rakshasa.no/
