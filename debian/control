@@ -5,7 +5,6 @@ Maintainer: Jose Luis Rivas <ghostbar@debian.org>
 Uploaders:
  Rogério Brito <rbrito@ime.usp.br>,
  Dmitry E. Oboukhov <unera@debian.org>,
- Benoît Knecht <benoit.knecht@fsfe.org>,
  Jonathan McDowell <noodles@earth.li>
 Build-Depends:
  debhelper (>= 9),
