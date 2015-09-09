@@ -1,0 +1,22 @@
+#
+# Upstream issue:
+# https://github.com/rakshasa/libtorrent/issues/59
+#
+# Upstream commit:
+# ca2256761716c367563b887f994b3d49193c1b77
+#
+diff --git a/test/Makefile.am b/test/Makefile.am
+index 6e3683f..3c45883 100644
+--- a/test/Makefile.am
++++ b/test/Makefile.am
+@@ -10,9 +10,9 @@ LibTorrentTest_LDADD = \
+ 	../src/torrent/peer/libsub_torrentpeer.la \
+ 	../src/data/libsub_data.la \
+ 	../src/dht/libsub_dht.la \
+-	../src/download/libsub_download.la \
+ 	../src/net/libsub_net.la \
+ 	../src/protocol/libsub_protocol.la \
++	../src/download/libsub_download.la \
+ 	../src/tracker/libsub_tracker.la \
+ 	../src/utils/libsub_utils.la \
+ 	../src/torrent/utils/libsub_torrentutils.la

@@ -1,8 +1,26 @@
-libtorrent (0.13.4-1) UNRELEASED; urgency=medium
+libtorrent (0.13.4-3) UNRELEASED; urgency=low
 
-  * New upstream version
+  * Remove Benoît Knecht from Uploaders. Closes: #779430.
 
- -- Jose Luis Rivas <ghostbar@debian.org>  Fri, 23 May 2014 13:03:43 -0700
+ -- Jonathan McDowell <noodles@earth.li>  Sun, 21 Jun 2015 20:36:06 +0100
+
+libtorrent (0.13.4-2) experimental; urgency=low
+
+  * Disable instrumentation / autotests on mips/mipsel/powerpc/sparc to fix
+    FTBFS.
+  * Bump Standards-Version to 3.9.6.
+    + No changes.
+
+ -- Jonathan McDowell <noodles@earth.li>  Wed, 25 Feb 2015 16:44:47 +0000
+
+libtorrent (0.13.4-1) experimental; urgency=low
+
+  * Upload to experimental.
+  * New upstream version.
+  * Remove obsolete DM-Upload-Allowed from debian/control
+  * Add myself to Uploaders.
+
+ -- Jonathan McDowell <noodles@earth.li>  Sun, 21 Dec 2014 23:20:55 +0000
 
 libtorrent (0.13.2-1) unstable; urgency=low
 
