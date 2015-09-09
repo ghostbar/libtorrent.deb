@@ -1,5 +1,5 @@
 // libTorrent - BitTorrent library
-// Copyright (C) 2005-2011, Jari Sundell
+// Copyright (C) 2005-2007, Jari Sundell
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -34,48 +34,11 @@
 //           Skomakerveien 33
 //           3185 Skoppum, NORWAY
 
-#ifndef LIBTORRENT_DIFFIE_HELLMAN_H
-#define LIBTORRENT_DIFFIE_HELLMAN_H
-
-#include "config.h"
-
-#include <string>
-
-#ifdef USE_OPENSSL
-#include <openssl/dh.h>
-#endif
+#ifndef LIBTORRENT_NET_THROTTLE_HANDLE_H
+#define LIBTORRENT_NET_THROTTLE_HANDLE_H
 
 namespace torrent {
 
-class DiffieHellman {
+class ThrottleHandle {
 public:
-  DiffieHellman(const unsigned char prime[], int primeLength,
-                const unsigned char generator[], int generatorLength);
-  ~DiffieHellman();
-
-  bool                compute_secret(const unsigned char pubkey[], unsigned int length);
-  void                store_pub_key(unsigned char* dest, unsigned int length);
-
-  bool                is_valid() const;
-
-  unsigned int        size() const         { return m_size; }
-
-  const char*         c_str() const        { return m_secret; }
-  std::string         secret_str() const   { return std::string(m_secret, m_size); }
-
-private:
-  DiffieHellman(const DiffieHellman& dh);
-  DiffieHellman& operator = (const DiffieHellman& dh);
-
-#ifdef USE_OPENSSL
-  DH*                 m_dh;
-#else
-  void*               m_void;
-#endif
-  char*               m_secret;
-  unsigned int        m_size;
-};
-
-};
-
-#endif
+  
