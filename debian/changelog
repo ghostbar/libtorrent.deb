@@ -4,7 +4,9 @@ libtorrent (0.13.6-1) UNRELEASED; urgency=low
   * Remove Benoît Knecht from Uploaders. Closes: #779430.
 
   [ Jose Luis Rivas ]
-  * New upstream version
+  * New upstream version.
+  * Bumped package to match the soname change. Closes: #797866.
+  * Removed patches, they were already applied upstream.
 
  -- Jose Luis Rivas <ghostbar@debian.org>  Wed, 09 Sep 2015 00:13:05 -0500
 
