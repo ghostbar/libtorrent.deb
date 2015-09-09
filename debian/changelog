@@ -5,6 +5,7 @@ libtorrent (0.13.6-1) UNRELEASED; urgency=low
 
   [ Jose Luis Rivas ]
   * New upstream version.
+  * debian/watch now uses github.
   * Bumped package to match the soname change. Closes: #797866.
   * Removed patches, they were already applied upstream.
 
