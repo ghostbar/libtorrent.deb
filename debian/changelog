@@ -8,6 +8,7 @@ libtorrent (0.13.6-1) unstable; urgency=low
   * debian/watch now uses github.
   * Bumped package to match the soname change. Closes: #797866.
   * Removed patches, they were already applied upstream.
+  * Updated homepage.
 
  -- Jose Luis Rivas <ghostbar@debian.org>  Wed, 09 Sep 2015 01:05:14 -0500
 
