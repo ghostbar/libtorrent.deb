@@ -1,8 +1,12 @@
-libtorrent (0.13.4-3) UNRELEASED; urgency=low
+libtorrent (0.13.6-1) UNRELEASED; urgency=low
 
+  [ Jonathan McDowell ]
   * Remove Benoît Knecht from Uploaders. Closes: #779430.
 
- -- Jonathan McDowell <noodles@earth.li>  Sun, 21 Jun 2015 20:36:06 +0100
+  [ Jose Luis Rivas ]
+  * New upstream version
+
+ -- Jose Luis Rivas <ghostbar@debian.org>  Wed, 09 Sep 2015 00:13:05 -0500
 
 libtorrent (0.13.4-2) experimental; urgency=low
 
