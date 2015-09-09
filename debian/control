@@ -33,7 +33,7 @@ Description: C++ BitTorrent library by Rakshasa (development files)
  This package contains the files needed to compile and link programs
  which use LibTorrent.
 
-Package: libtorrent18
+Package: libtorrent19
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Multi-Arch: same
