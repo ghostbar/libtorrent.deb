@@ -23,7 +23,7 @@ Section: libdevel
 Architecture: any
 Depends:
  libsigc++-2.0-dev,
- libtorrent18 (= ${binary:Version}),
+ libtorrent19 (= ${binary:Version}),
  ${misc:Depends}
 Description: C++ BitTorrent library by Rakshasa (development files)
  LibTorrent is a BitTorrent library written in C++ for *nix. It is
