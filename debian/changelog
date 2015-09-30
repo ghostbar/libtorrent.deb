@@ -1,4 +1,4 @@
-libtorrent (0.13.6-1) unstable; urgency=low
+libtorrent (0.13.6-1) unstable; urgency=medium
 
   [ Jonathan McDowell ]
   * Remove Benoît Knecht from Uploaders. Closes: #779430.
@@ -7,10 +7,11 @@ libtorrent (0.13.6-1) unstable; urgency=low
   * New upstream version.
   * debian/watch now uses github.
   * Bumped package to match the soname change. Closes: #797866.
+    (urgency=medium since this is an RC-bug, gcc5 transition)
   * Removed patches, they were already applied upstream.
   * Updated homepage.
 
- -- Jose Luis Rivas <ghostbar@debian.org>  Wed, 09 Sep 2015 01:05:14 -0500
+ -- Jose Luis Rivas <ghostbar@debian.org>  Wed, 30 Sep 2015 04:03:36 +0000
 
 libtorrent (0.13.4-2) experimental; urgency=low
 
